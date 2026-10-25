@@ -2,6 +2,7 @@ package dev.abhiram.checklist.data
 
 import dev.abhiram.checklist.data.model.AppState
 import dev.abhiram.checklist.data.model.Checklist
+import dev.abhiram.checklist.data.model.ChecklistItem
 
 object ChecklistStore {
 
@@ -45,6 +46,82 @@ object ChecklistStore {
             },
         )
     }
+
+    fun addItem(
+        state: AppState,
+        checklistId: String,
+        itemId: String,
+        text: String,
+        now: Long,
+    ): AppState {
+        val clean = requireText(text, "Item text")
+        return state.copy(
+            checklists = state.checklists.map { checklist ->
+                if (checklist.id != checklistId) {
+                    checklist
+                } else {
+                    val position = (checklist.items.maxOfOrNull { it.position } ?: -1) + 1
+                    checklist.copy(
+                        items = checklist.items + ChecklistItem(
+                            id = itemId,
+                            text = clean,
+                            createdAt = now,
+                            position = position,
+                        ),
+                        updatedAt = now,
+                    )
+                }
+            },
+        )
+    }
+
+    fun updateItem(state: AppState, itemId: String, text: String, now: Long): AppState {
+        val clean = requireText(text, "Item text")
+        return state.copy(
+            checklists = state.checklists.map { checklist ->
+                if (checklist.items.none { it.id == itemId }) {
+                    checklist
+                } else {
+                    checklist.copy(
+                        items = checklist.items.map { item ->
+                            if (item.id == itemId) item.copy(text = clean) else item
+                        },
+                        updatedAt = now,
+                    )
+                }
+            },
+        )
+    }
+
+    fun toggleItem(state: AppState, itemId: String, now: Long): AppState =
+        state.copy(
+            checklists = state.checklists.map { checklist ->
+                if (checklist.items.none { it.id == itemId }) {
+                    checklist
+                } else {
+                    checklist.copy(
+                        items = checklist.items.map { item ->
+                            if (item.id == itemId) item.copy(isDone = !item.isDone) else item
+                        },
+                        updatedAt = now,
+                    )
+                }
+            },
+        )
+
+    fun deleteItem(state: AppState, itemId: String, now: Long): AppState =
+        state.copy(
+            checklists = state.checklists.map { checklist ->
+                if (checklist.items.none { it.id == itemId }) {
+                    checklist
+                } else {
+                    checklist.copy(
+                        items = checklist.items.filterNot { it.id == itemId },
+                        updatedAt = now,
+                    )
+                }
+            },
+        )
 
     internal fun requireText(value: String, label: String): String {
         val clean = value.trim()
