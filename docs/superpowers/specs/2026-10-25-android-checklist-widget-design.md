@@ -25,7 +25,33 @@ with no translucency, blur, gradients, or liquid-glass effects.
 - Widget defaults to 4×4, resizes horizontally and vertically down to 2×2 and up
   to the launcher's maximum with no artificial cap.
 - All data stays on the device and survives process death and reboot.
-- Produce an installable debug APK and verify it on a physical phone over USB.
+- Stay responsive and lightweight on a 4 GB RAM MediaTek phone: no polling,
+  no background services, near-zero idle CPU, and a small release APK.
+- Produce installable debug and release APKs and verify the release build on a
+  physical phone over USB.
+
+## 2.1 Low-end device budget
+
+The target phone is a 4 GB RAM MediaTek device, so the app must stay usable
+under memory pressure and avoid unnecessary wakeups.
+
+- One Activity, one process, one app-scope coroutine collector. No services,
+  alarms, WorkManager, or polling.
+- Widget `updatePeriodMillis=0`. Refresh only after data changes or widget
+  actions, debounced briefly and coalesced into one `updateAll`.
+- No duplicate refresh from the widget action callback; the application
+  observer owns refresh.
+- Widget reads a repository snapshot inside `provideGlance`: one small
+  DataStore read per update, never a loop.
+- One JSON document. Writes happen only on explicit user actions, never per
+  keystroke.
+- Vector drawables only. No bitmaps, large images, or decorative animations.
+- No Room, KSP, Hilt, or navigation library.
+- Ship an R8-minified, resource-shrunk release APK for daily use. It is signed
+  with the local debug key for sideloading, not for Play Store distribution.
+- Verification: record PSS after opening both screens and confirm idle CPU is
+  near 0%. Investigate if PSS exceeds about 150 MB or idle CPU stays above
+  about 0.5%.
 
 ## 3. Non-goals (v1)
 
@@ -35,7 +61,9 @@ with no translucency, blur, gradients, or liquid-glass effects.
 - Multiple pinned checklists or multiple widget variants.
 - Adding or editing item text from the widget.
 - Backup/export/import, cloud sync, accounts.
-- Release signing, Play Store packaging, tablet-specific layouts.
+- Release signing for the Play Store and Play Store packaging. The local
+  R8 release APK is signed with the debug key only for sideloading.
+- Tablet-specific layouts.
 - App localization beyond English.
 
 ## 4. User experience
@@ -213,10 +241,13 @@ app/src/main/java/dev/abhiram/checklist/
 - `ChecklistViewModel` collects repository state and exposes a screen-oriented
   UI state. Every mutation goes through the repository.
 - A widget-refresh observer in the application scope watches the repository
-  state and calls `ChecklistWidget.updateAll()` on changes (debounced briefly).
-  The widget action callback also refreshes after toggling, covering the case
-  where the app process was not already alive.
-- Widget reads state with `repository.state.first()` inside `provideGlance`.
+  state and calls `ChecklistWidget.updateAll()` after a 150 ms debounce. It is
+  the single refresh path and also runs when a widget action starts the app
+  process.
+- The widget action callback toggles through the repository only; it does not
+  call `updateAll` itself.
+- Widget reads a repository snapshot inside `provideGlance`: one small
+  DataStore read per update, never a loop.
 
 ## 10. Widget technical design
 
@@ -237,8 +268,9 @@ app/src/main/java/dev/abhiram/checklist/
 - Tap title/header opens the app directly to the pinned checklist.
 - Tap empty state opens the Lists screen.
 - `ToggleItemAction` receives the item id via `ActionParameters`; Glance invokes
-  its suspending `onAction`, which toggles through the repository and refreshes
-  all widget instances. No `BroadcastReceiver.goAsync()` is involved.
+  its suspending `onAction`, which toggles through the repository. The
+  application observer performs the single debounced refresh; the callback does
+  not call `updateAll` itself. No `BroadcastReceiver.goAsync()` is involved.
 - Multiple widget instances are supported and all show the same pinned list.
 - Unpinning or deleting the pinned list makes widgets show the empty state.
 - Widget updates on app launch, on any data change while the process is alive,
@@ -281,13 +313,20 @@ app/src/main/java/dev/abhiram/checklist/
 - Kill app, reboot phone; data persists.
 - Rotate app on both screens; state survives.
 - Verify dark and light system modes in the app; widget stays iOS-dark.
+- Install the R8 release APK and run the matrix against it.
+- After opening both screens, run `adb shell dumpsys meminfo
+  dev.abhiram.checklist` and record PSS.
+- Leave the app open and idle for 10 seconds, then run `adb shell top -b -n 1`
+  and confirm the app's CPU is near 0%.
+- Toggle widget rows rapidly; confirm refresh is coalesced and does not jank.
 
 ### Build verification
 
 ```bash
 ./gradlew test
 ./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
 ## 13. Toolchain
@@ -302,6 +341,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
   compileSdk ≥ 35 and AGP ≥ 8.6; Compose 1.12.1 requires compileSdk 37 and
   AGP ≥ 9.1, so the cached toolchain fits.
 - Gradle memory settings tuned for 8 GB RAM: `-Xmx2g`, max 4 workers.
+- Release build: R8 minification, resource shrinking, and the local debug
+  signing key for sideloading.
 - Physical test device over USB via `adb`; no emulator installed.
 
 ## 14. Build milestones
@@ -314,8 +355,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
    navigation; installable and usable without the widget.
 4. **Widget** (~2 h): provider XML, Glance UI, resize math, row toggles,
    cold-process action, refresh wiring; iOS-dark theme.
-5. **Verification/polish** (~1 h): device test matrix, fixes, README, final
-   `test` + `assembleDebug`, APK handed over.
+5. **Verification/polish** (~1 h): device test matrix, PSS/idle-CPU check,
+   fixes, README, final `test` + `assembleDebug` + `assembleRelease`, release
+   APK handed over.
 
 ## 15. Risks and fallbacks
 
@@ -338,6 +380,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 - Android Studio/Gradle project at `/home/abhiram/projects/widgets`.
 - Debug APK at `app/build/outputs/apk/debug/app-debug.apk`.
+- R8 release APK at `app/build/outputs/apk/release/app-release.apk`, signed with
+  the debug key for local sideloading.
 - Unit tests and passing `./gradlew test`.
 - `README.md` with build, install, and usage instructions.
 - Git history with the spec, implementation, and tests.

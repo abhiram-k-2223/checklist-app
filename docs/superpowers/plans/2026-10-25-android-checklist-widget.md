@@ -21,6 +21,7 @@
   export JAVA_HOME=/home/abhiram/.local/opt/jdk21
   ```
 - Local-only: no `INTERNET` permission, no network calls, no analytics, no accounts.
+- Low-end budget: target a 4 GB RAM MediaTek phone. One Activity, one app-scope collector, no services/alarms/WorkManager/polling, one debounced widget refresh path, vector assets only, and an R8 release build for daily use.
 - Exactly one checklist may be pinned. Pinning another unpins the previous. Item text and checklist titles are trimmed and non-blank.
 - Widget: default 4×4, minimum 2×2, resizable horizontally and vertically with no artificial maximum, `updatePeriodMillis=0`, iOS-dark palette below, unchecked items first then completed, entire row toggles the item, header opens that checklist in the app, empty state opens the app.
 - Widget palette: background `#1C1C1E`, separator `#2C2C2E`, muted `#8E8E93`, unchecked ring `#636366`, blue `#0A84FF`, white `#FFFFFF`, 24 dp corners, 14–16 dp padding.
@@ -33,7 +34,8 @@
 - **Widget toggle with the app process dead** — tapping a widget row after `adb shell am force-stop dev.abhiram.checklist` must start the process, flip the item, and refresh the widget. Verified manually in Task 9.
 - **Corrupt persisted JSON** — must never crash or wipe silently; the raw value is backed up under `state_json_corrupt` and the app starts from an empty state. Unit-tested in Tasks 2 and 5.
 - **Resize extremes** — 2×2 and very tall/wide widgets must not crash, clip badly, or render more rows than fit. Row math is unit-tested in Task 8 and resized manually in Tasks 8 and 10.
-- **Rapid/stale widget taps** — toggling an item that was deleted, or tapping repeatedly, must be a no-op or a consistent toggle, never a crash. Unit-tested in Task 4; manually checked in Task 9.
+- **Rapid/stale widget taps** — toggling an item that was deleted, or tapping repeatedly, must be a no-op or a consistent toggle, never a crash, and must coalesce into one refresh. Unit-tested in Task 4; manually checked in Tasks 9 and 10.
+- **4 GB RAM / MediaTek responsiveness** — idle CPU must be near 0%, PSS recorded, the release APK used for daily use, and no polling or background services. Verified in Task 10.
 - **Long text and many items** — long titles/items ellipsize, item text wraps to two lines, and hidden rows collapse into a `+N more` line. Unit-tested in Task 8 and manually checked in Tasks 7 and 10.
 
 ---
@@ -48,6 +50,7 @@
 - Create: `local.properties` (machine-local, never committed)
 - Create: `gradle/libs.versions.toml`
 - Create: `app/build.gradle.kts`
+- Create: `app/proguard-rules.pro`
 - Create: `app/src/main/AndroidManifest.xml`
 - Create: `app/src/main/kotlin/dev/abhiram/checklist/MainActivity.kt`
 - Create: `app/src/main/kotlin/dev/abhiram/checklist/ui/theme/Theme.kt`
@@ -58,7 +61,7 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: a Gradle project where `./gradlew :app:assembleDebug` succeeds, the `ChecklistTheme` composable, and the `MainActivity` entry point.
+- Produces: a Gradle project where `./gradlew :app:assembleDebug` and `./gradlew :app:assembleRelease` succeed, the `ChecklistTheme` composable, and the `MainActivity` entry point.
 
 - [ ] **Step 1: Create the Gradle configuration files**
 
@@ -190,6 +193,18 @@ android {
 
     buildFeatures { compose = true }
 
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -228,6 +243,14 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+```
+
+`app/proguard-rules.pro`:
+
+```proguard
+# Glance and widget entry points are referenced by name from the manifest and
+# action callbacks; keep them when R8 shrinks the release build.
+-keep class dev.abhiram.checklist.widget.** { *; }
 ```
 
 - [ ] **Step 2: Create the manifest and minimal resources**
@@ -398,14 +421,15 @@ GRADLE_BIN=$(echo /home/abhiram/.gradle/wrapper/dists/gradle-9.8.1-bin/*/gradle-
 "$GRADLE_BIN" wrapper --gradle-version 9.8.1 --distribution-type bin
 ./gradlew --version
 ./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
 ```
 
-Expected: `BUILD SUCCESSFUL`; APK exists at `app/build/outputs/apk/debug/app-debug.apk`.
+Expected: `BUILD SUCCESSFUL`; debug APK exists at `app/build/outputs/apk/debug/app-debug.apk` and the R8 release APK exists at `app/build/outputs/apk/release/app-release.apk`.
 
 - [ ] **Step 5: Commit the scaffold**
 
 ```bash
-git add .gitignore settings.gradle.kts build.gradle.kts gradle.properties gradle/libs.versions.toml gradle/wrapper gradlew gradlew.bat app/build.gradle.kts app/src
+git add .gitignore settings.gradle.kts build.gradle.kts gradle.properties gradle/libs.versions.toml gradle/wrapper gradlew gradlew.bat app/build.gradle.kts app/proguard-rules.pro app/src
 git commit -m "build: scaffold Android Compose project"
 ```
 
@@ -3144,8 +3168,8 @@ git commit -m "feat: add resizable Glance checklist widget"
 - Consumes: `ChecklistRepository`, `ChecklistWidget`.
 - Produces:
   - `ChecklistWidget.EXTRA_OPEN_CHECKLIST`
-  - `ToggleItemAction` callback
-  - app-scoped widget refresh observer
+  - `ToggleItemAction` callback (toggle only; refresh is handled by the observer)
+  - debounced app-scoped widget refresh observer (single refresh path)
 
 - [ ] **Step 1: Add tap actions and the toggle callback**
 
@@ -3175,7 +3199,6 @@ import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.updateAll
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
@@ -3234,7 +3257,7 @@ class ToggleItemAction : ActionCallback {
         val itemId = parameters[ITEM_ID_KEY] ?: return
         val app = context.applicationContext as ChecklistApplication
         app.repository.toggleItem(itemId)
-        ChecklistWidget().updateAll(context)
+        // The application-scope observer performs the single debounced refresh.
     }
 }
 
@@ -3387,6 +3410,8 @@ private fun ColorProviderCompat(color: Color) = androidx.glance.unit.ColorProvid
 Replace `app/src/main/kotlin/dev/abhiram/checklist/ChecklistApplication.kt` with:
 
 ```kotlin
+@file:OptIn(kotlinx.coroutines.FlowPreview::class)
+
 package dev.abhiram.checklist
 
 import android.app.Application
@@ -3400,6 +3425,7 @@ import dev.abhiram.checklist.widget.ChecklistWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
 val Context.checklistDataStore by preferencesDataStore(name = "checklist_state")
@@ -3418,9 +3444,11 @@ class ChecklistApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         appScope.launch {
-            repository.state.collect {
-                ChecklistWidget().updateAll(this@ChecklistApplication)
-            }
+            repository.state
+                .debounce(150)
+                .collect {
+                    ChecklistWidget().updateAll(this@ChecklistApplication)
+                }
         }
     }
 }
@@ -3504,7 +3532,7 @@ Expected: build succeeds and the app installs over the previous version without 
 5. Press back; the lists screen appears. Open the checklist in the app; the widget state matches.
 6. Unpin the pinned list in the app; the widget shows **Pin a checklist**. Tap the empty state; the app opens.
 7. Run `adb shell am force-stop dev.abhiram.checklist`, then tap a widget row. The process starts, the item toggles, and the widget refreshes.
-8. Tap the same row repeatedly; it toggles consistently and never crashes.
+8. Tap the same row repeatedly; it toggles consistently, refresh coalesces, and the app does not crash.
 9. Change the checklist in the app; the widget updates without reopening it.
 
 If no phone is connected, record which steps could not be verified and continue.
@@ -3523,11 +3551,11 @@ git commit -m "feat: toggle items from the widget and refresh live"
 **Files:**
 - Create: `README.md`
 - Modify: any file needed for defects found during verification
-- Test: full JVM test suite, debug build, manual phone matrix
+- Test: full JVM test suite, debug and release builds, manual phone matrix
 
 **Interfaces:**
 - Consumes: the complete app.
-- Produces: a documented, verified, committed project.
+- Produces: a documented, verified, committed project and a release APK.
 
 - [ ] **Step 1: Write the README**
 
@@ -3549,6 +3577,8 @@ one pinned checklist and lets you tick items off without opening the app.
 - Flat iOS-style dark widget theme
 - Widget rows toggle items in place; the widget header opens that checklist
 - Local-only data in Preferences DataStore; no accounts, network, or analytics
+- Built for low-end phones: no polling or background services, debounced
+  single-path widget refresh, vector-only assets, and an R8 release build
 
 ## Build
 
@@ -3557,17 +3587,41 @@ Requires JDK 21 and the Android SDK with platform 37.
 ```bash
 export JAVA_HOME=/home/abhiram/.local/opt/jdk21
 ./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
 ```
 
-The APK is at `app/build/outputs/apk/debug/app-debug.apk`.
+The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. For daily use,
+install the R8 release build at
+`app/build/outputs/apk/release/app-release.apk`; it is signed with the local
+debug key for sideloading, not for Play Store distribution.
 
 ## Install on a phone
 
 Enable USB debugging, connect the phone, then:
 
 ```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/release/app-release.apk
 adb shell am start -n dev.abhiram.checklist/.MainActivity
+```
+
+## Low-resource design
+
+- One Activity and one process; no services, alarms, WorkManager, or polling
+- The widget uses `updatePeriodMillis=0` and refreshes only after data changes
+  or widget actions, through one 150 ms debounced observer
+- Widget actions toggle only; they do not trigger a second refresh
+- The widget reads a repository snapshot once per render, never in a loop
+- Data is one JSON document in Preferences DataStore, written only on explicit
+  user actions
+- Vector drawables only; no bitmaps or decorative animations
+- No Room, KSP, Hilt, or navigation library
+- R8 minification and resource shrinking for the release build
+
+To check footprint on the phone:
+
+```bash
+adb shell dumpsys meminfo dev.abhiram.checklist
+adb shell top -b -n 1 | grep dev.abhiram.checklist
 ```
 
 ## Add the widget
@@ -3593,7 +3647,9 @@ state recovery, and widget row layout.
 - `data/ChecklistStore` — pure state transformations
 - `data/DefaultChecklistRepository` — atomic DataStore updates
 - `ui` — Compose screens and `ChecklistViewModel`
-- `widget` — Glance renderer, row math, and action callback
+- `widget` — Glance renderer, row math, and toggle action callback
+- `ChecklistApplication` — manual DI container and the single debounced
+  widget-refresh observer
 
 There is no Room, KSP, Hilt, or navigation library; the app is intentionally
 small and builds quickly on a low-memory machine.
@@ -3612,9 +3668,15 @@ Run:
 ```bash
 ./gradlew test
 ./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
 ```
 
-Expected: every unit test passes and the debug APK builds with no errors.
+Expected: every unit test passes; both APKs build with no errors. Install the
+release APK on the phone for the matrix:
+
+```bash
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
 
 - [ ] **Step 3: Run the full manual matrix on the phone**
 
@@ -3634,6 +3696,10 @@ Verify each line and record the result:
 | Widget header | Opens the pinned checklist directly |
 | Widget empty | Unpin or delete the pinned list; the widget shows the empty state and opens the app |
 | Process death | Force-stop the app, then tap a widget row; it toggles |
+| Release build | Install `app-release.apk`; run the matrix against it |
+| Memory | Record PSS from `dumpsys meminfo`; investigate above about 150 MB |
+| Idle CPU | After 10 seconds idle, `top` shows near 0% for the app |
+| Rapid taps | Repeated widget taps toggle consistently and coalesce refresh |
 | Long text | Long titles ellipsize; long item text wraps to two lines in the app |
 | Many items | Widget caps rows and shows `+N more` |
 
@@ -3665,6 +3731,6 @@ If Step 4 changed code, include those paths in `git add` and use a message that 
 
 ## Plan complete
 
-All ten tasks produce a working, testable increment. Tasks 1–5 build and test the data layer without a phone; Tasks 6–7 add the app UI; Tasks 8–9 add and connect the widget; Task 10 verifies the whole thing.
+All ten tasks produce a working, testable increment. Tasks 1–5 build and test the data layer without a phone; Tasks 6–7 add the app UI; Tasks 8–9 add and connect the widget; Task 10 verifies the whole thing and the release footprint.
 
 
