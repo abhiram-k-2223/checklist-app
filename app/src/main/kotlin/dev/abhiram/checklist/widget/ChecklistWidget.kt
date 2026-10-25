@@ -190,13 +190,18 @@ private fun WidgetContent(checklist: Checklist?, openIntent: Intent) {
                 )
             } else {
                 rowSet.visible.forEach { item ->
-                    WidgetItemRow(item)
-                    Spacer(
-                        GlanceModifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(ColorProviderCompat(WidgetSeparator)),
-                    )
+                    // Keep the divider inside each item container. Glance limits a
+                    // RemoteViews container to 10 direct children; with a flat list
+                    // the header plus row/divider pairs overflow that limit.
+                    Column {
+                        WidgetItemRow(item)
+                        Spacer(
+                            GlanceModifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(ColorProviderCompat(WidgetSeparator)),
+                        )
+                    }
                 }
                 if (rowSet.hiddenCount > 0) {
                     Spacer(GlanceModifier.height(6.dp))

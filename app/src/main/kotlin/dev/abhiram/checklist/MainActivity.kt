@@ -14,12 +14,17 @@ import dev.abhiram.checklist.ui.ChecklistApp
 import dev.abhiram.checklist.ui.ChecklistViewModel
 import dev.abhiram.checklist.ui.theme.ChecklistTheme
 import dev.abhiram.checklist.widget.ChecklistWidget
+import dev.abhiram.checklist.widget.updateChecklistWidgets
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: ChecklistViewModel by viewModels {
         val app = application as ChecklistApplication
-        ChecklistViewModel.factory(this, app.repository)
+        ChecklistViewModel.factory(
+            owner = this,
+            repository = app.repository,
+            refreshWidgets = { updateChecklistWidgets(applicationContext) },
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -3,10 +3,30 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > **Execution status (2026-10-25):** all ten tasks are implemented on
-> `feat/checklist-app` through commit `c9af0aa`; the final review fix pass
-> follows it. The unchecked boxes below are the original planning steps, not
-> an execution record. Manual phone steps were not run because no device was
-> attached; see the ledger in `.superpowers/sdd/2026-10-25-android-checklist-widget/progress.md`.
+> `feat/checklist-app` through the final review fix commit. The unchecked boxes below are the original planning steps, not
+> an execution record. Manual phone steps were run on a connected Android 14 phone
+> for app CRUD and widget render/toggle; PSS, idle CPU, reboot, and resize checks
+> remain unverified. See the ledger in
+> `.superpowers/sdd/2026-10-25-android-checklist-widget/progress.md`.
+>
+> **Post-execution deviations (2026-10-26):** the shipped implementation differs
+> from the Task 9 code below in these ways, each verified on the phone:
+> - App edits refresh widgets directly after a successful ViewModel mutation
+>   (`updateChecklistWidgets`, awaiting each `GlanceAppWidget.update`). The
+>   application-scope debounced observer was removed; there is no background
+>   collector or `updateAll` WorkManager enqueue.
+> - Widget taps still toggle and update their own widget inside the callback.
+> - Glance RemoteViews caps a container at 10 direct children, so each row and
+>   its divider share an item container, and visible rows are capped at 8 with a
+>   `+N more` line.
+> - R8 keeps `androidx.room.**`, `androidx.work.**`, `RoomDatabase` subclasses,
+>   and `ListenableWorker` subclasses so WorkManager's Room database can be
+>   created in the minified release build.
+> - The release APK was exercised on Android 14: the widget rendered five items,
+>   toggled a row, and the app reflected the change.
+>
+> The code blocks below remain the original plan, not a literal transcript of
+> the final files; the files and tests in the repository are authoritative.
 
 **Goal:** Build a local-only Android checklist app with a resizable, iOS-dark home-screen widget whose checkboxes toggle items in place.
 
@@ -27,7 +47,7 @@
   export JAVA_HOME=/home/abhiram/.local/opt/jdk21
   ```
 - Local-only: no `INTERNET` permission, no network calls, no analytics, no accounts.
-- Low-end budget: target a 4 GB RAM MediaTek phone. One Activity, one app-scope collector, no services/alarms/scheduled WorkManager/polling, one debounced refresh path for app edits plus an in-callback update for widget taps, vector assets only, and an R8 release build for daily use. Glance’s transitive WorkManager is lazy-initialized only if an async widget request needs it; its startup initializer is disabled.
+- Low-end budget: target a 4 GB RAM MediaTek phone. One Activity, no background collector, no services/alarms/scheduled WorkManager/polling. App edits await a direct widget refresh after each successful mutation; widget taps update their widget in-callback. Vector assets only, and an R8 release build for daily use. Glance’s transitive WorkManager is lazy-initialized only if an async widget request needs it; its startup initializer is disabled. R8 keep rules cover the widget entry points and WorkManager/Room reflection targets.
 - Exactly one checklist may be pinned. Pinning another unpins the previous. Item text and checklist titles are trimmed and non-blank.
 - Widget: default 4×4, minimum 2×2, resizable horizontally and vertically with no artificial maximum, `updatePeriodMillis=0`, iOS-dark palette below, unchecked items first then completed, entire row toggles the item, header opens that checklist in the app, empty state opens the app.
 - Widget palette: background `#1C1C1E`, separator `#2C2C2E`, muted `#8E8E93`, unchecked ring `#636366`, blue `#0A84FF`, white `#FFFFFF`, 24 dp corners, 14–16 dp padding.
@@ -40,7 +60,7 @@
 - **Widget toggle with the app process dead** — tapping a widget row after `adb shell am kill dev.abhiram.checklist` (Android 15+; `am force-stop` disables widgets there) must start the process, flip the item, and refresh the widget. On older releases `am force-stop` is also valid. Verified manually in Task 9.
 - **Corrupt persisted JSON** — must never crash or wipe silently; the raw value is backed up under `state_json_corrupt` and the app starts from an empty state. Unit-tested in Tasks 2 and 5.
 - **Resize extremes** — 2×2 and very tall/wide widgets must not crash, clip badly, or render more rows than fit. Row math is unit-tested in Task 8 and resized manually in Tasks 8 and 10.
-- **Rapid/stale widget taps** — toggling an item that was deleted, or tapping repeatedly, must be a no-op or a consistent toggle, never a crash, and must refresh the widget reliably. The action callback refreshes the tapped widget before returning; the app observer may render once more, which is idempotent. Unit-tested in Task 4; manually checked in Tasks 9 and 10.
+- **Rapid/stale widget taps** — toggling an item that was deleted, or tapping repeatedly, must be a no-op or a consistent toggle, never a crash, and must refresh the widget reliably. The action callback refreshes the tapped widget before returning; there is no background observer. Unit-tested in Task 4; manually checked in Tasks 9 and 10.
 - **4 GB RAM / MediaTek responsiveness** — idle CPU must be near 0%, PSS recorded, the release APK used for daily use, and no polling or background services. Verified in Task 10.
 - **Long text and many items** — app text ellipsizes; widget text wraps to at most two lines and clips overflow because Glance 1.2 has no ellipsis API; hidden rows collapse into a `+N more` line, and a widget too short for any row shows a tappable “Open app to see items” prompt. Unit-tested in Task 8 and manually checked in Tasks 7 and 10.
 
@@ -2800,7 +2820,8 @@ class WidgetRowsTest {
         assertEquals(3, maxWidgetRows(250f))
         assertEquals(4, maxWidgetRows(300f))
         assertEquals(6, maxWidgetRows(400f))
-        assertEquals(11, maxWidgetRows(600f))
+        assertEquals(8, maxWidgetRows(600f))
+        assertEquals(8, maxWidgetRows(1000f))
     }
 }
 ```
@@ -2845,8 +2866,10 @@ fun widgetRows(checklist: Checklist, maxRows: Int): WidgetRowSet {
 fun maxWidgetRows(heightDp: Float): Int {
     // 32 dp outer padding + ~49 dp header + 20 dp overflow line = 101 dp fixed.
     // Each row is 44 dp plus a 1 dp separator.
+    // Glance RemoteViews allows at most 10 direct children: header + 8 item
+    // containers + overflow line.
     val availableForRows = (heightDp - 101f).coerceAtLeast(0f)
-    return (availableForRows / 45f).toInt().coerceIn(0, 24)
+    return (availableForRows / 45f).toInt().coerceIn(0, 8)
 }
 ```
 

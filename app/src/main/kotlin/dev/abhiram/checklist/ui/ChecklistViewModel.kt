@@ -29,6 +29,7 @@ class ChecklistViewModel(
     private val onError: (String, Throwable) -> Unit = { message, error ->
         Log.e("ChecklistViewModel", message, error)
     },
+    private val refreshWidgets: suspend () -> Unit = {},
 ) : ViewModel() {
 
     private val selectedId = savedStateHandle.getStateFlow<String?>(KEY_SELECTED, null)
@@ -58,6 +59,15 @@ class ChecklistViewModel(
                 throw cancelled
             } catch (error: Exception) {
                 onError("$name failed", error)
+                return@launch
+            }
+
+            try {
+                refreshWidgets()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                onError("Widget refresh failed", error)
             }
         }
     }
@@ -107,6 +117,7 @@ class ChecklistViewModel(
         fun factory(
             owner: SavedStateRegistryOwner,
             repository: ChecklistRepository,
+            refreshWidgets: suspend () -> Unit,
         ): AbstractSavedStateViewModelFactory =
             object : AbstractSavedStateViewModelFactory(owner, null) {
                 @Suppress("UNCHECKED_CAST")
@@ -114,7 +125,7 @@ class ChecklistViewModel(
                     key: String,
                     modelClass: Class<T>,
                     handle: SavedStateHandle,
-                ): T = ChecklistViewModel(repository, handle) as T
+                ): T = ChecklistViewModel(repository, handle, refreshWidgets = refreshWidgets) as T
             }
     }
 }

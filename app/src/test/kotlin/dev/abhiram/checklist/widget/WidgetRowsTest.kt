@@ -92,6 +92,7 @@ class WidgetRowsTest {
         assertEquals(3, maxWidgetRows(250f))
         assertEquals(4, maxWidgetRows(300f))
         assertEquals(6, maxWidgetRows(400f))
-        assertEquals(11, maxWidgetRows(600f))
+        assertEquals(8, maxWidgetRows(600f))
+        assertEquals(8, maxWidgetRows(1000f))
     }
 }

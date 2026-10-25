@@ -35,16 +35,15 @@ with no translucency, blur, gradients, or liquid-glass effects.
 The target phone is a 4 GB RAM MediaTek device, so the app must stay usable
 under memory pressure and avoid unnecessary wakeups.
 
-- One Activity, one process, one app-scope coroutine collector. No services,
-  alarms, scheduled WorkManager jobs, or polling. Glance's transitively bundled
-  WorkManager is lazy-initialized only if an async widget request needs it; its
-  startup initializer is disabled.
-- Widget `updatePeriodMillis=0`. App-originated edits refresh through one
-  150 ms debounced observer. A widget action updates the tapped widget inside
-  its callback, before the callback returns, so the render cannot outlive the
-  receiver.
-- Both refresh paths are idempotent; an action may render once more when the
-  observer sees the same change. Nothing polls.
+- One Activity, one process. No services, alarms, scheduled WorkManager jobs,
+  or polling. Glance's transitively bundled WorkManager is lazy-initialized only
+  if an async widget request needs it; its startup initializer is disabled.
+- Widget `updatePeriodMillis=0`. App-originated edits update every widget
+  directly after a successful mutation, awaiting each update. A widget action
+  toggles and updates the tapped widget inside its callback, before the callback
+  returns, so the render cannot outlive the receiver.
+- Both refresh paths are idempotent. There is no background observer, so an
+  action renders once. Nothing polls.
 - Widget reads a repository snapshot inside `provideGlance`: one small
   DataStore read per update, never a loop.
 - One JSON document. Writes happen only on explicit user actions, never per
@@ -53,6 +52,8 @@ under memory pressure and avoid unnecessary wakeups.
 - No Room, KSP, Hilt, or navigation library.
 - Ship an R8-minified, resource-shrunk release APK for daily use. It is signed
   with the local debug key for sideloading, not for Play Store distribution.
+  R8 keep rules cover the widget entry points and Glance's WorkManager/Room
+  reflection targets; the release build must render and toggle on-device.
 - Verification: record PSS after opening both screens and confirm idle CPU is
   near 0%. Investigate if PSS exceeds about 150 MB or idle CPU stays above
   about 0.5%.
@@ -224,7 +225,7 @@ Single Gradle module `app`, package `dev.abhiram.checklist`, app name
 
 ```
 app/src/main/java/dev/abhiram/checklist/
-  ChecklistApplication.kt        // manual dependency container + widget refresh observer
+  ChecklistApplication.kt        // manual dependency container + WorkManager config
   MainActivity.kt
   data/
     model/AppState.kt            // models + JSON serializer config
@@ -247,13 +248,11 @@ app/src/main/java/dev/abhiram/checklist/
 - Manual dependency container in `ChecklistApplication`; no Hilt, no KSP.
 - `ChecklistViewModel` collects repository state and exposes a screen-oriented
   UI state. Every mutation goes through the repository.
-- A widget-refresh observer in the application scope watches the repository
-  state and calls `ChecklistWidget.updateAll()` after a 150 ms debounce. It
-  handles app-originated edits and also runs when a widget action starts the
-  process.
+- After a successful ViewModel mutation, a `refreshWidgets` callback resolves
+  every Checklist widget ID and awaits `ChecklistWidget.update()` for each.
+  There is no background observer or debounce.
 - The widget action callback toggles through the repository and then updates
-  that widget instance before returning. The observer remains for app edits;
-  a widget action may therefore render twice, which is idempotent and bounded.
+  that widget instance before returning. It renders once.
 - Widget reads a repository snapshot inside `provideGlance`: one small
   DataStore read per update, never a loop.
 
@@ -261,10 +260,12 @@ app/src/main/java/dev/abhiram/checklist/
 
 - Glance `GlanceAppWidget` with `SizeMode.Exact`; derives available size from
   `LocalSize` and computes rows from real layout constants:
-  `rows = ((height - 101) / 45).toInt().coerceIn(0, 24)`, where 101 dp covers
+  `rows = ((height - 101) / 45).toInt().coerceIn(0, 8)`, where 101 dp covers
   32 dp outer padding, the ~49 dp header, and the 20 dp overflow line, and each
   row is 44 dp plus a 1 dp separator. Zero rows shows the tappable compact
-  prompt described above.
+  prompt described above. Glance RemoteViews allows at most 10 direct children
+  per container, so the visible-row cap is 8; each row and its divider are one
+  item container, and a `+N more` line covers the rest.
 - Provider XML:
   - `minWidth` / `minHeight`: 250 dp (defaults to 4×4 on older launchers)
   - `minResizeWidth` / `minResizeHeight`: 110 dp (2×2 minimum)
@@ -283,11 +284,12 @@ app/src/main/java/dev/abhiram/checklist/
   `ChecklistWidget().update(context, glanceId)` before returning. Glance's
   normal action path uses `ActionCallbackBroadcastReceiver` with `goAsync`, so
   keeping the update inside the callback prevents the render from outliving the
-  receiver. The application observer still handles app-originated edits.
+  receiver. The ViewModel refresh callback handles app-originated edits after
+  every successful mutation.
 - Multiple widget instances are supported and all show the same pinned list.
 - Unpinning or deleting the pinned list makes widgets show the empty state.
-- Widget updates on app launch, on any data change while the process is alive,
-  and after widget actions.
+- Widgets update after app mutations that change data and after widget actions.
+  They do not poll or watch in the background.
 
 ## 11. Error handling and edge cases
 
