@@ -4,8 +4,10 @@ package dev.abhiram.checklist
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.glance.appwidget.updateAll
+import androidx.work.Configuration
 import dev.abhiram.checklist.data.ChecklistRepository
 import dev.abhiram.checklist.data.DataStoreStatePersistence
 import dev.abhiram.checklist.data.DefaultChecklistRepository
@@ -18,9 +20,17 @@ import kotlinx.coroutines.launch
 
 val Context.checklistDataStore by preferencesDataStore(name = "checklist_state")
 
-class ChecklistApplication : Application() {
+class ChecklistApplication : Application(), Configuration.Provider {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // Glance needs WorkManager for async widget requests. The manifest removes
+    // WorkManager's startup initializer so it is created only when a widget
+    // request actually needs it, keeping cold start light.
+    override fun getWorkManagerConfiguration(): Configuration =
+        Configuration.Builder()
+            .setMinimumLoggingLevel(Log.ERROR)
+            .build()
 
     val repository: ChecklistRepository by lazy {
         DefaultChecklistRepository(

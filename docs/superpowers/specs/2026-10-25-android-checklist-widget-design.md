@@ -36,7 +36,9 @@ The target phone is a 4 GB RAM MediaTek device, so the app must stay usable
 under memory pressure and avoid unnecessary wakeups.
 
 - One Activity, one process, one app-scope coroutine collector. No services,
-  alarms, WorkManager, or polling.
+  alarms, scheduled WorkManager jobs, or polling. Glance's transitively bundled
+  WorkManager is lazy-initialized only if an async widget request needs it; its
+  startup initializer is disabled.
 - Widget `updatePeriodMillis=0`. Refresh only after data changes or widget
   actions, debounced briefly and coalesced into one `updateAll`.
 - No duplicate refresh from the widget action callback; the application
