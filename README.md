@@ -14,7 +14,8 @@ one pinned checklist and lets you tick items off without opening the app.
 - Widget rows toggle items in place; the widget header opens that checklist
 - Local-only data in Preferences DataStore; no accounts, network, or analytics
 - Built for low-end phones: no polling or background services, debounced
-  single-path widget refresh, vector-only assets, and an R8 release build
+  refresh for app edits plus an in-callback update for widget taps,
+  vector-only assets, and an R8 release build
 
 ## Build
 
@@ -47,9 +48,9 @@ adb shell am start -n dev.abhiram.checklist/.MainActivity
 - Glance bundles WorkManager for async widget requests, but its startup
   initializer is disabled; WorkManager starts only if a widget request needs
   it, and this app schedules no background work
-- The widget uses `updatePeriodMillis=0` and refreshes only after data changes
-  or widget actions, through one 150 ms debounced observer
-- Widget actions toggle only; they do not trigger a second refresh
+- The widget uses `updatePeriodMillis=0`; app edits refresh through one 150 ms
+  debounced observer, and a widget tap updates its own widget before the action
+  callback returns (the observer may render once more; both paths are idempotent)
 - The widget reads a repository snapshot once per render, never in a loop
 - Data is one JSON document in Preferences DataStore, written only on explicit
   user actions
@@ -78,8 +79,9 @@ export JAVA_HOME=/home/abhiram/.local/opt/jdk21
 ./gradlew test
 ```
 
-Unit tests cover the JSON codec, store rules, repository persistence, corrupt
-state recovery, and widget row layout.
+The suite has 44 tests covering the JSON codec, store rules, repository
+persistence, corrupt state recovery, widget row layout, widget toggle refresh,
+and ViewModel mutation error isolation.
 
 ## Architecture
 
@@ -88,8 +90,8 @@ state recovery, and widget row layout.
 - `data/DefaultChecklistRepository` — atomic DataStore updates
 - `ui` — Compose screens and `ChecklistViewModel`
 - `widget` — Glance renderer, row math, and toggle action callback
-- `ChecklistApplication` — manual DI container and the single debounced
-  widget-refresh observer
+- `ChecklistApplication` — manual DI container, debounced refresh observer for
+  app edits, and lazy WorkManager configuration
 
 There is no Room, KSP, Hilt, or navigation library; the app is intentionally
 small and builds quickly on a low-memory machine.
@@ -99,3 +101,7 @@ small and builds quickly on a low-memory machine.
 - No cloud sync, reminders, due dates, tags, drag reorder, or images
 - No widget text entry
 - Widget taps toggle items only; all editing happens in the app
+- Widget text caps at two lines and clips overflow because Glance 1.2 has no
+  ellipsis API; a 2×2 widget may show a compact “Open app” prompt instead of rows
+- “Local-only” means the app has no network permission or sync; Android’s OS
+  backup setting may still include app data if enabled on the device

@@ -12,14 +12,17 @@ fun widgetRows(checklist: Checklist, maxRows: Int): WidgetRowSet {
     val sorted = checklist.items.sortedWith(
         compareBy<ChecklistItem> { it.isDone }.thenBy { it.position },
     )
-    val cap = maxRows.coerceAtLeast(1)
+    val cap = maxRows.coerceAtLeast(0)
+    val visible = sorted.take(cap)
     return WidgetRowSet(
-        visible = sorted.take(cap),
-        hiddenCount = (sorted.size - cap).coerceAtLeast(0),
+        visible = visible,
+        hiddenCount = sorted.size - visible.size,
     )
 }
 
 fun maxWidgetRows(heightDp: Float): Int {
-    val availableForRows = (heightDp - 72f).coerceAtLeast(0f)
-    return (availableForRows / 41f).toInt().coerceIn(1, 24)
+    // 32 dp outer padding + ~49 dp header + 20 dp overflow line = 101 dp fixed.
+    // Each row is 44 dp plus a 1 dp separator.
+    val availableForRows = (heightDp - 101f).coerceAtLeast(0f)
+    return (availableForRows / 45f).toInt().coerceIn(0, 24)
 }

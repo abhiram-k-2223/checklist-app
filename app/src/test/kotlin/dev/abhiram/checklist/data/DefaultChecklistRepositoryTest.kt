@@ -4,8 +4,10 @@ import dev.abhiram.checklist.data.model.AppState
 import dev.abhiram.checklist.data.model.Checklist
 import dev.abhiram.checklist.data.model.ChecklistItem
 import dev.abhiram.checklist.data.model.ChecklistJson
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -121,5 +123,27 @@ class DefaultChecklistRepositoryTest {
         val snapshot = repository.snapshot()
 
         assertEquals(listOf("c1", "c2"), snapshot.checklists.map { it.id })
+    }
+
+    @Test
+    fun `snapshot propagates cancellation instead of returning empty state`() = runTest {
+        val persistence = object : StatePersistence {
+            override val rawState: Flow<String?> = flow {
+                throw CancellationException("cancelled")
+            }
+
+            override suspend fun update(transform: (String?) -> PersistenceUpdate): Unit =
+                error("not used")
+        }
+        val repository = DefaultChecklistRepository(persistence, backgroundScope)
+
+        var cancelled = false
+        try {
+            repository.snapshot()
+        } catch (expected: CancellationException) {
+            cancelled = true
+        }
+
+        assertTrue(cancelled)
     }
 }

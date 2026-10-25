@@ -2,6 +2,7 @@ package dev.abhiram.checklist.widget
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -39,8 +40,10 @@ import androidx.glance.text.TextStyle
 import dev.abhiram.checklist.ChecklistApplication
 import dev.abhiram.checklist.MainActivity
 import dev.abhiram.checklist.R
+import dev.abhiram.checklist.data.model.AppState
 import dev.abhiram.checklist.data.model.Checklist
 import dev.abhiram.checklist.data.model.ChecklistItem
+import kotlinx.coroutines.CancellationException
 
 private val WidgetBackground = Color(0xFF1C1C1E)
 private val WidgetSeparator = Color(0xFF2C2C2E)
@@ -55,9 +58,18 @@ class ChecklistWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val repository = (context.applicationContext as ChecklistApplication).repository
-        val checklist = repository.snapshot().checklists.firstOrNull { it.isPinned }
+        val state = try {
+            repository.snapshot()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.e("ChecklistWidget", "Could not read widget state", error)
+            AppState()
+        }
+        val checklist = state.checklists.firstOrNull { it.isPinned }
         val openIntent = Intent(context, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(EXTRA_FROM_WIDGET, true)
             checklist?.let { putExtra(EXTRA_OPEN_CHECKLIST, it.id) }
         }
         provideContent {
@@ -66,6 +78,7 @@ class ChecklistWidget : GlanceAppWidget() {
     }
 
     companion object {
+        const val EXTRA_FROM_WIDGET = "from_widget"
         const val EXTRA_OPEN_CHECKLIST = "open_checklist_id"
     }
 }
@@ -78,8 +91,13 @@ class ToggleItemAction : ActionCallback {
     ) {
         val itemId = parameters[ITEM_ID_KEY] ?: return
         val app = context.applicationContext as ChecklistApplication
-        app.repository.toggleItem(itemId)
-        // The application-scope observer performs the single debounced refresh.
+        WidgetToggleRunner(
+            toggle = { id -> app.repository.toggleItem(id) },
+            refresh = { ChecklistWidget().update(context, glanceId) },
+            onError = { stage, error ->
+                Log.e("ChecklistWidget", "Widget $stage failed", error)
+            },
+        ).run(itemId)
     }
 }
 
@@ -158,11 +176,17 @@ private fun WidgetContent(checklist: Checklist?, openIntent: Intent) {
             if (rowSet.visible.isEmpty()) {
                 Spacer(GlanceModifier.height(10.dp))
                 Text(
-                    text = "Nothing to do yet",
+                    text = if (checklist.items.isEmpty()) {
+                        "Open app to add items"
+                    } else {
+                        "Open app to see items"
+                    },
+                    modifier = GlanceModifier.clickable(actionStartActivity(openIntent)),
                     style = TextStyle(
                         color = ColorProviderCompat(WidgetMuted),
                         fontSize = 13.sp,
                     ),
+                    maxLines = 1,
                 )
             } else {
                 rowSet.visible.forEach { item ->
@@ -201,7 +225,7 @@ private fun WidgetItemRow(item: ChecklistItem) {
                     actionParametersOf(ITEM_ID_KEY to item.id),
                 ),
             )
-            .height(40.dp),
+            .height(44.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(

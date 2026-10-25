@@ -2,9 +2,11 @@ package dev.abhiram.checklist.data
 
 import dev.abhiram.checklist.data.model.AppState
 import dev.abhiram.checklist.data.model.ChecklistJson
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -19,10 +21,19 @@ class DefaultChecklistRepository(
 
     override val state: StateFlow<AppState> = persistence.rawState
         .map { ChecklistJson.decode(it) }
+        .catch { error ->
+            if (error is CancellationException) throw error
+            emit(AppState())
+        }
         .stateIn(scope, SharingStarted.Eagerly, AppState())
 
-    override suspend fun snapshot(): AppState =
+    override suspend fun snapshot(): AppState = try {
         ChecklistJson.decode(persistence.rawState.first())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        AppState()
+    }
 
     private suspend fun mutate(transform: (AppState) -> AppState) {
         persistence.update { raw ->

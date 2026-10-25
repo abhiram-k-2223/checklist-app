@@ -68,11 +68,11 @@ class WidgetRowsTest {
     }
 
     @Test
-    fun `zero max rows still shows one row`() {
+    fun `zero max rows shows no rows`() {
         val rows = widgetRows(checklistOf(item("a", false, 0)), maxRows = 0)
 
-        assertEquals(1, rows.visible.size)
-        assertEquals(0, rows.hiddenCount)
+        assertEquals(0, rows.visible.size)
+        assertEquals(1, rows.hiddenCount)
     }
 
     @Test
@@ -85,10 +85,13 @@ class WidgetRowsTest {
 
     @Test
     fun `row capacity grows with the widget height`() {
-        assertEquals(1, maxWidgetRows(120f))
-        assertEquals(3, maxWidgetRows(200f))
-        assertEquals(5, maxWidgetRows(300f))
-        assertEquals(8, maxWidgetRows(400f))
-        assertEquals(12, maxWidgetRows(600f))
+        assertEquals(0, maxWidgetRows(110f))
+        assertEquals(0, maxWidgetRows(120f))
+        assertEquals(0, maxWidgetRows(130f))
+        assertEquals(2, maxWidgetRows(200f))
+        assertEquals(3, maxWidgetRows(250f))
+        assertEquals(4, maxWidgetRows(300f))
+        assertEquals(6, maxWidgetRows(400f))
+        assertEquals(11, maxWidgetRows(600f))
     }
 }

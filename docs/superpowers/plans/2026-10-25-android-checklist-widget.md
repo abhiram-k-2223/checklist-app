@@ -1,6 +1,12 @@
 # Android Checklist App with Widget Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Execution status (2026-10-25):** all ten tasks are implemented on
+> `feat/checklist-app` through commit `c9af0aa`; the final review fix pass
+> follows it. The unchecked boxes below are the original planning steps, not
+> an execution record. Manual phone steps were not run because no device was
+> attached; see the ledger in `.superpowers/sdd/2026-10-25-android-checklist-widget/progress.md`.
 
 **Goal:** Build a local-only Android checklist app with a resizable, iOS-dark home-screen widget whose checkboxes toggle items in place.
 
@@ -21,7 +27,7 @@
   export JAVA_HOME=/home/abhiram/.local/opt/jdk21
   ```
 - Local-only: no `INTERNET` permission, no network calls, no analytics, no accounts.
-- Low-end budget: target a 4 GB RAM MediaTek phone. One Activity, one app-scope collector, no services/alarms/WorkManager/polling, one debounced widget refresh path, vector assets only, and an R8 release build for daily use.
+- Low-end budget: target a 4 GB RAM MediaTek phone. One Activity, one app-scope collector, no services/alarms/scheduled WorkManager/polling, one debounced refresh path for app edits plus an in-callback update for widget taps, vector assets only, and an R8 release build for daily use. Glance’s transitive WorkManager is lazy-initialized only if an async widget request needs it; its startup initializer is disabled.
 - Exactly one checklist may be pinned. Pinning another unpins the previous. Item text and checklist titles are trimmed and non-blank.
 - Widget: default 4×4, minimum 2×2, resizable horizontally and vertically with no artificial maximum, `updatePeriodMillis=0`, iOS-dark palette below, unchecked items first then completed, entire row toggles the item, header opens that checklist in the app, empty state opens the app.
 - Widget palette: background `#1C1C1E`, separator `#2C2C2E`, muted `#8E8E93`, unchecked ring `#636366`, blue `#0A84FF`, white `#FFFFFF`, 24 dp corners, 14–16 dp padding.
@@ -31,12 +37,12 @@
 
 ## Review Focus
 
-- **Widget toggle with the app process dead** — tapping a widget row after `adb shell am force-stop dev.abhiram.checklist` must start the process, flip the item, and refresh the widget. Verified manually in Task 9.
+- **Widget toggle with the app process dead** — tapping a widget row after `adb shell am kill dev.abhiram.checklist` (Android 15+; `am force-stop` disables widgets there) must start the process, flip the item, and refresh the widget. On older releases `am force-stop` is also valid. Verified manually in Task 9.
 - **Corrupt persisted JSON** — must never crash or wipe silently; the raw value is backed up under `state_json_corrupt` and the app starts from an empty state. Unit-tested in Tasks 2 and 5.
 - **Resize extremes** — 2×2 and very tall/wide widgets must not crash, clip badly, or render more rows than fit. Row math is unit-tested in Task 8 and resized manually in Tasks 8 and 10.
-- **Rapid/stale widget taps** — toggling an item that was deleted, or tapping repeatedly, must be a no-op or a consistent toggle, never a crash, and must coalesce into one refresh. Unit-tested in Task 4; manually checked in Tasks 9 and 10.
+- **Rapid/stale widget taps** — toggling an item that was deleted, or tapping repeatedly, must be a no-op or a consistent toggle, never a crash, and must refresh the widget reliably. The action callback refreshes the tapped widget before returning; the app observer may render once more, which is idempotent. Unit-tested in Task 4; manually checked in Tasks 9 and 10.
 - **4 GB RAM / MediaTek responsiveness** — idle CPU must be near 0%, PSS recorded, the release APK used for daily use, and no polling or background services. Verified in Task 10.
-- **Long text and many items** — long titles/items ellipsize, item text wraps to two lines, and hidden rows collapse into a `+N more` line. Unit-tested in Task 8 and manually checked in Tasks 7 and 10.
+- **Long text and many items** — app text ellipsizes; widget text wraps to at most two lines and clips overflow because Glance 1.2 has no ellipsis API; hidden rows collapse into a `+N more` line, and a widget too short for any row shows a tappable “Open app to see items” prompt. Unit-tested in Task 8 and manually checked in Tasks 7 and 10.
 
 ---
 
@@ -2770,11 +2776,11 @@ class WidgetRowsTest {
     }
 
     @Test
-    fun `zero max rows still shows one row`() {
+    fun `zero max rows shows no rows`() {
         val rows = widgetRows(checklistOf(item("a", false, 0)), maxRows = 0)
 
-        assertEquals(1, rows.visible.size)
-        assertEquals(0, rows.hiddenCount)
+        assertEquals(0, rows.visible.size)
+        assertEquals(1, rows.hiddenCount)
     }
 
     @Test
@@ -2787,11 +2793,14 @@ class WidgetRowsTest {
 
     @Test
     fun `row capacity grows with the widget height`() {
-        assertEquals(1, maxWidgetRows(120f))
-        assertEquals(3, maxWidgetRows(200f))
-        assertEquals(5, maxWidgetRows(300f))
-        assertEquals(8, maxWidgetRows(400f))
-        assertEquals(12, maxWidgetRows(600f))
+        assertEquals(0, maxWidgetRows(110f))
+        assertEquals(0, maxWidgetRows(120f))
+        assertEquals(0, maxWidgetRows(130f))
+        assertEquals(2, maxWidgetRows(200f))
+        assertEquals(3, maxWidgetRows(250f))
+        assertEquals(4, maxWidgetRows(300f))
+        assertEquals(6, maxWidgetRows(400f))
+        assertEquals(11, maxWidgetRows(600f))
     }
 }
 ```
@@ -2825,16 +2834,19 @@ fun widgetRows(checklist: Checklist, maxRows: Int): WidgetRowSet {
     val sorted = checklist.items.sortedWith(
         compareBy<ChecklistItem> { it.isDone }.thenBy { it.position },
     )
-    val cap = maxRows.coerceAtLeast(1)
+    val cap = maxRows.coerceAtLeast(0)
+    val visible = sorted.take(cap)
     return WidgetRowSet(
-        visible = sorted.take(cap),
-        hiddenCount = (sorted.size - cap).coerceAtLeast(0),
+        visible = visible,
+        hiddenCount = sorted.size - visible.size,
     )
 }
 
 fun maxWidgetRows(heightDp: Float): Int {
-    val availableForRows = (heightDp - 72f).coerceAtLeast(0f)
-    return (availableForRows / 41f).toInt().coerceIn(1, 24)
+    // 32 dp outer padding + ~49 dp header + 20 dp overflow line = 101 dp fixed.
+    // Each row is 44 dp plus a 1 dp separator.
+    val availableForRows = (heightDp - 101f).coerceAtLeast(0f)
+    return (availableForRows / 45f).toInt().coerceIn(0, 24)
 }
 ```
 
@@ -2997,11 +3009,13 @@ private fun WidgetContent(checklist: Checklist?) {
             if (rowSet.visible.isEmpty()) {
                 Spacer(GlanceModifier.height(10.dp))
                 Text(
-                    text = "Nothing to do yet",
+                    text = "Open app to see items",
+                    modifier = GlanceModifier.clickable(actionStartActivity(openIntent)),
                     style = TextStyle(
                         color = ColorProviderCompat(WidgetMuted),
                         fontSize = 13.sp,
                     ),
+                    maxLines = 1,
                 )
             } else {
                 rowSet.visible.forEach { item ->
@@ -3035,7 +3049,7 @@ private fun WidgetItemRow(item: ChecklistItem) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .height(40.dp),
+            .height(44.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
@@ -3162,14 +3176,14 @@ git commit -m "feat: add resizable Glance checklist widget"
 - Modify: `app/src/main/kotlin/dev/abhiram/checklist/widget/ChecklistWidget.kt`
 - Modify: `app/src/main/kotlin/dev/abhiram/checklist/ChecklistApplication.kt`
 - Modify: `app/src/main/kotlin/dev/abhiram/checklist/MainActivity.kt`
-- Test: manual widget interaction and force-stop recovery
+- Test: manual widget interaction and process-death recovery
 
 **Interfaces:**
 - Consumes: `ChecklistRepository`, `ChecklistWidget`.
 - Produces:
   - `ChecklistWidget.EXTRA_OPEN_CHECKLIST`
-  - `ToggleItemAction` callback (toggle only; refresh is handled by the observer)
-  - debounced app-scoped widget refresh observer (single refresh path)
+  - `ToggleItemAction` callback (toggles, then updates its widget before returning)
+  - debounced app-scoped widget refresh observer for app-originated edits
 
 - [ ] **Step 1: Add tap actions and the toggle callback**
 
@@ -3257,7 +3271,9 @@ class ToggleItemAction : ActionCallback {
         val itemId = parameters[ITEM_ID_KEY] ?: return
         val app = context.applicationContext as ChecklistApplication
         app.repository.toggleItem(itemId)
-        // The application-scope observer performs the single debounced refresh.
+        // Refresh inside the callback lifetime so the render cannot outlive the
+        // receiver. The app-scope observer still handles app-originated edits.
+        ChecklistWidget().update(context, glanceId)
     }
 }
 
@@ -3336,11 +3352,13 @@ private fun WidgetContent(checklist: Checklist?, openIntent: Intent) {
             if (rowSet.visible.isEmpty()) {
                 Spacer(GlanceModifier.height(10.dp))
                 Text(
-                    text = "Nothing to do yet",
+                    text = "Open app to see items",
+                    modifier = GlanceModifier.clickable(actionStartActivity(openIntent)),
                     style = TextStyle(
                         color = ColorProviderCompat(WidgetMuted),
                         fontSize = 13.sp,
                     ),
+                    maxLines = 1,
                 )
             } else {
                 rowSet.visible.forEach { item ->
@@ -3379,7 +3397,7 @@ private fun WidgetItemRow(item: ChecklistItem) {
                     actionParametersOf(ITEM_ID_KEY to item.id),
                 ),
             )
-            .height(40.dp),
+            .height(44.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
@@ -3531,8 +3549,8 @@ Expected: build succeeds and the app installs over the previous version without 
 4. Tap the widget header; the app opens on that checklist.
 5. Press back; the lists screen appears. Open the checklist in the app; the widget state matches.
 6. Unpin the pinned list in the app; the widget shows **Pin a checklist**. Tap the empty state; the app opens.
-7. Run `adb shell am force-stop dev.abhiram.checklist`, then tap a widget row. The process starts, the item toggles, and the widget refreshes.
-8. Tap the same row repeatedly; it toggles consistently, refresh coalesces, and the app does not crash.
+7. On Android 15+, run `adb shell am kill dev.abhiram.checklist` (or swipe the app away); on older releases `adb shell am force-stop dev.abhiram.checklist` is valid. Then tap a widget row. The process starts, the item toggles, and the widget refreshes.
+8. Tap the same row repeatedly; it toggles consistently, the widget renders the current state, and the app does not crash.
 9. Change the checklist in the app; the widget updates without reopening it.
 
 If no phone is connected, record which steps could not be verified and continue.
@@ -3606,10 +3624,12 @@ adb shell am start -n dev.abhiram.checklist/.MainActivity
 
 ## Low-resource design
 
-- One Activity and one process; no services, alarms, WorkManager, or polling
-- The widget uses `updatePeriodMillis=0` and refreshes only after data changes
-  or widget actions, through one 150 ms debounced observer
-- Widget actions toggle only; they do not trigger a second refresh
+- One Activity and one process; no services, alarms, or scheduled WorkManager jobs
+- Glance’s transitive WorkManager is lazy-initialized only for async widget
+  requests; its startup initializer is disabled
+- The widget uses `updatePeriodMillis=0`; app edits refresh through one 150 ms
+  debounced observer, and a widget tap updates its own widget before the action
+  callback returns
 - The widget reads a repository snapshot once per render, never in a loop
 - Data is one JSON document in Preferences DataStore, written only on explicit
   user actions
@@ -3699,8 +3719,8 @@ Verify each line and record the result:
 | Release build | Install `app-release.apk`; run the matrix against it |
 | Memory | Record PSS from `dumpsys meminfo`; investigate above about 150 MB |
 | Idle CPU | After 10 seconds idle, `top` shows near 0% for the app |
-| Rapid taps | Repeated widget taps toggle consistently and coalesce refresh |
-| Long text | Long titles ellipsize; long item text wraps to two lines in the app |
+| Rapid taps | Repeated widget taps toggle consistently and render the current state without a crash or stale widget |
+| Long text | App titles/items ellipsize; widget text caps at two lines and clips overflow (Glance 1.2 limitation) |
 | Many items | Widget caps rows and shows `+N more` |
 
 - [ ] **Step 4: Fix any defect found and rerun the affected checks**

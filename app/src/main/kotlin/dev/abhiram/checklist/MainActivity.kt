@@ -25,7 +25,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        openFromIntent(intent)
+        if (savedInstanceState == null) {
+            openFromIntent(intent)
+        }
         setContent {
             ChecklistTheme {
                 Surface(
@@ -45,7 +47,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openFromIntent(intent: Intent?) {
-        intent?.getStringExtra(ChecklistWidget.EXTRA_OPEN_CHECKLIST)
-            ?.let(viewModel::openChecklist)
+        val source = intent ?: return
+        val launch = widgetLaunch(
+            fromWidget = source.getBooleanExtra(ChecklistWidget.EXTRA_FROM_WIDGET, false),
+            checklistId = source.getStringExtra(ChecklistWidget.EXTRA_OPEN_CHECKLIST),
+        ) ?: return
+
+        if (launch.checklistId == null) {
+            viewModel.closeChecklist()
+        } else {
+            viewModel.openChecklist(launch.checklistId)
+        }
+        source.removeExtra(ChecklistWidget.EXTRA_FROM_WIDGET)
+        source.removeExtra(ChecklistWidget.EXTRA_OPEN_CHECKLIST)
     }
 }

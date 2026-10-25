@@ -39,10 +39,12 @@ under memory pressure and avoid unnecessary wakeups.
   alarms, scheduled WorkManager jobs, or polling. Glance's transitively bundled
   WorkManager is lazy-initialized only if an async widget request needs it; its
   startup initializer is disabled.
-- Widget `updatePeriodMillis=0`. Refresh only after data changes or widget
-  actions, debounced briefly and coalesced into one `updateAll`.
-- No duplicate refresh from the widget action callback; the application
-  observer owns refresh.
+- Widget `updatePeriodMillis=0`. App-originated edits refresh through one
+  150 ms debounced observer. A widget action updates the tapped widget inside
+  its callback, before the callback returns, so the render cannot outlive the
+  receiver.
+- Both refresh paths are idempotent; an action may render once more when the
+  observer sees the same change. Nothing polls.
 - Widget reads a repository snapshot inside `provideGlance`: one small
   DataStore read per update, never a loop.
 - One JSON document. Writes happen only on explicit user actions, never per
@@ -121,19 +123,22 @@ configuration changes and process death. System back from `Checklist` returns to
 
 - Background: `#1C1C1E`, corner radius 24 dp, padding 16 dp.
 - Header:
-  - Checklist title, 17 sp, bold, white `#FFFFFF`, single line with ellipsis.
+  - Checklist title, 17 sp, bold, white `#FFFFFF`, single line. Glance 1.2
+    clips rather than ellipsizes; the title is clipped at the edge.
   - Progress `done/total`, 13 sp, `#8E8E93`.
   - 1 dp hairline divider `#2C2C2E` below the header.
 - Rows:
-  - Minimum height 40 dp; 22 dp circular icon; 15 sp item text.
+  - Height 44 dp; 22 dp circular icon; 15 sp item text.
   - Unchecked: outlined circle `#636366`, white text.
   - Checked: filled blue circle with white check `#0A84FF`, muted strikethrough
     text `#8E8E93`.
   - Items sorted unchecked first (stored order), then completed (stored order).
-  - Text wraps to at most two lines, ellipsized.
+  - Text wraps to at most two lines; overflow is clipped (Glance 1.2 has no
+    ellipsis parameter).
   - Entire row is tappable to toggle.
-- Empty states: pinned list with no items, and no pinned list at all. Both show
-  a short muted message prompting the user to open the app.
+- Empty states: pinned list with no items, no pinned list at all, and a widget
+  too short to fit any item row. Each shows a short muted message prompting the
+  user to open the app; the message is tappable.
 - No stock Glance checkbox; custom icon + text rows so the iOS look is exact.
 
 ## 6. Data model
@@ -243,19 +248,23 @@ app/src/main/java/dev/abhiram/checklist/
 - `ChecklistViewModel` collects repository state and exposes a screen-oriented
   UI state. Every mutation goes through the repository.
 - A widget-refresh observer in the application scope watches the repository
-  state and calls `ChecklistWidget.updateAll()` after a 150 ms debounce. It is
-  the single refresh path and also runs when a widget action starts the app
+  state and calls `ChecklistWidget.updateAll()` after a 150 ms debounce. It
+  handles app-originated edits and also runs when a widget action starts the
   process.
-- The widget action callback toggles through the repository only; it does not
-  call `updateAll` itself.
+- The widget action callback toggles through the repository and then updates
+  that widget instance before returning. The observer remains for app edits;
+  a widget action may therefore render twice, which is idempotent and bounded.
 - Widget reads a repository snapshot inside `provideGlance`: one small
   DataStore read per update, never a loop.
 
 ## 10. Widget technical design
 
 - Glance `GlanceAppWidget` with `SizeMode.Exact`; derives available size from
-  `LocalSize` and computes rows:
-  `rows = ((height - header - padding) / rowHeight).toInt().coerceIn(1, 24)`.
+  `LocalSize` and computes rows from real layout constants:
+  `rows = ((height - 101) / 45).toInt().coerceIn(0, 24)`, where 101 dp covers
+  32 dp outer padding, the ~49 dp header, and the 20 dp overflow line, and each
+  row is 44 dp plus a 1 dp separator. Zero rows shows the tappable compact
+  prompt described above.
 - Provider XML:
   - `minWidth` / `minHeight`: 250 dp (defaults to 4×4 on older launchers)
   - `minResizeWidth` / `minResizeHeight`: 110 dp (2×2 minimum)
@@ -270,9 +279,11 @@ app/src/main/java/dev/abhiram/checklist/
 - Tap title/header opens the app directly to the pinned checklist.
 - Tap empty state opens the Lists screen.
 - `ToggleItemAction` receives the item id via `ActionParameters`; Glance invokes
-  its suspending `onAction`, which toggles through the repository. The
-  application observer performs the single debounced refresh; the callback does
-  not call `updateAll` itself. No `BroadcastReceiver.goAsync()` is involved.
+  its suspending `onAction`, which toggles through the repository and then calls
+  `ChecklistWidget().update(context, glanceId)` before returning. Glance's
+  normal action path uses `ActionCallbackBroadcastReceiver` with `goAsync`, so
+  keeping the update inside the callback prevents the render from outliving the
+  receiver. The application observer still handles app-originated edits.
 - Multiple widget instances are supported and all show the same pinned list.
 - Unpinning or deleting the pinned list makes widgets show the empty state.
 - Widget updates on app launch, on any data change while the process is alive,
@@ -286,7 +297,8 @@ app/src/main/java/dev/abhiram/checklist/
 - Toggling an item that was deleted concurrently is a no-op.
 - Duplicate rapid checkbox taps are serialized by DataStore updates.
 - Rotations and process death preserve the open screen via saved state.
-- Long titles/items ellipsize; item text wraps to two lines.
+- App titles/items ellipsize; item text wraps to two lines. In the widget,
+  Glance 1.2 caps lines and clips overflow rather than ellipsizing.
 - If DataStore is unreadable, show empty app state and keep a corrupt backup key.
 - No network permissions or internet dependency at runtime.
 
@@ -308,7 +320,11 @@ app/src/main/java/dev/abhiram/checklist/
 
 - Fresh install: empty state, create list, add items, edit, toggle, delete.
 - Pin a list; widget appears with correct content and progress.
-- Toggle from widget with the app open, backgrounded, and force-stopped.
+- Toggle from widget with the app open, backgrounded, and killed. Use
+  `adb shell am kill dev.abhiram.checklist` or swipe the task away. On Android
+  15+, do not use `am force-stop`: the platform cancels pending intents and
+  disables widgets until the user opens the app. Force-stop remains valid on
+  older releases.
 - Resize widget to 2×2, 4×4, tall, and wide; verify row/empty-state behavior.
 - Pin a different list; widget switches. Unpin; widget shows empty state.
 - Delete pinned list; widget shows empty state.
@@ -369,8 +385,9 @@ adb install -r app/build/outputs/apk/release/app-release.apk
   Compose 1.9/1.10 with Glance 1.2. Time-boxed to ~30 minutes.
 - **Low RAM:** first build and Kotlin/Compose compilation may be slow. Cap
   Gradle workers and avoid clean builds; use incremental builds.
-- **Glance cold-start actions:** explicitly test with `adb shell am
-  force-stop dev.abhiram.checklist`. If the action fails to run, verify the
+- **Glance cold-start actions:** test with `adb shell am kill
+  dev.abhiram.checklist` (Android 15+) or swipe the task away. On older Android
+  versions, `am force-stop` also works. If the action fails to run, verify the
   receiver/intent configuration before changing approach.
 - **Launcher differences:** rounded corners and resize limits are
   launcher-controlled; the widget draws its own rounded background and accepts

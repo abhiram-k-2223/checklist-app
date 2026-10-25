@@ -1,5 +1,6 @@
 package dev.abhiram.checklist.ui
 
+import android.util.Log
 import androidx.lifecycle.AbstractSavedStateViewModelFactory
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -7,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.savedstate.SavedStateRegistryOwner
 import dev.abhiram.checklist.data.ChecklistRepository
 import dev.abhiram.checklist.data.model.Checklist
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -24,6 +26,9 @@ data class ChecklistUiState(
 class ChecklistViewModel(
     private val repository: ChecklistRepository,
     private val savedStateHandle: SavedStateHandle,
+    private val onError: (String, Throwable) -> Unit = { message, error ->
+        Log.e("ChecklistViewModel", message, error)
+    },
 ) : ViewModel() {
 
     private val selectedId = savedStateHandle.getStateFlow<String?>(KEY_SELECTED, null)
@@ -45,18 +50,30 @@ class ChecklistViewModel(
         savedStateHandle[KEY_SELECTED] = null
     }
 
-    fun createChecklist(title: String) {
+    private fun launchMutation(name: String, block: suspend () -> Unit) {
         viewModelScope.launch {
+            try {
+                block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                onError("$name failed", error)
+            }
+        }
+    }
+
+    fun createChecklist(title: String) {
+        launchMutation("Create checklist") {
             openChecklist(repository.createChecklist(title))
         }
     }
 
     fun renameChecklist(id: String, title: String) {
-        viewModelScope.launch { repository.renameChecklist(id, title) }
+        launchMutation("Rename checklist") { repository.renameChecklist(id, title) }
     }
 
     fun deleteChecklist(id: String) {
-        viewModelScope.launch {
+        launchMutation("Delete checklist") {
             repository.deleteChecklist(id)
             if (selectedId.value == id) {
                 closeChecklist()
@@ -65,23 +82,23 @@ class ChecklistViewModel(
     }
 
     fun setPinned(id: String?) {
-        viewModelScope.launch { repository.setPinned(id) }
+        launchMutation("Pin checklist") { repository.setPinned(id) }
     }
 
     fun addItem(checklistId: String, text: String) {
-        viewModelScope.launch { repository.addItem(checklistId, text) }
+        launchMutation("Add item") { repository.addItem(checklistId, text) }
     }
 
     fun updateItem(itemId: String, text: String) {
-        viewModelScope.launch { repository.updateItem(itemId, text) }
+        launchMutation("Update item") { repository.updateItem(itemId, text) }
     }
 
     fun toggleItem(itemId: String) {
-        viewModelScope.launch { repository.toggleItem(itemId) }
+        launchMutation("Toggle item") { repository.toggleItem(itemId) }
     }
 
     fun deleteItem(itemId: String) {
-        viewModelScope.launch { repository.deleteItem(itemId) }
+        launchMutation("Delete item") { repository.deleteItem(itemId) }
     }
 
     companion object {
