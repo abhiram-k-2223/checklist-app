@@ -1,6 +1,7 @@
 package dev.abhiram.checklist.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -10,8 +11,14 @@ import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -30,6 +37,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import dev.abhiram.checklist.ChecklistApplication
+import dev.abhiram.checklist.MainActivity
 import dev.abhiram.checklist.R
 import dev.abhiram.checklist.data.model.Checklist
 import dev.abhiram.checklist.data.model.ChecklistItem
@@ -39,6 +47,8 @@ private val WidgetSeparator = Color(0xFF2C2C2E)
 private val WidgetMuted = Color(0xFF8E8E93)
 private val WidgetText = Color(0xFFFFFFFF)
 
+private val ITEM_ID_KEY = ActionParameters.Key<String>("item_id")
+
 class ChecklistWidget : GlanceAppWidget() {
 
     override val sizeMode = SizeMode.Exact
@@ -46,14 +56,35 @@ class ChecklistWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val repository = (context.applicationContext as ChecklistApplication).repository
         val checklist = repository.snapshot().checklists.firstOrNull { it.isPinned }
-        provideContent {
-            WidgetContent(checklist = checklist)
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            checklist?.let { putExtra(EXTRA_OPEN_CHECKLIST, it.id) }
         }
+        provideContent {
+            WidgetContent(checklist = checklist, openIntent = openIntent)
+        }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_CHECKLIST = "open_checklist_id"
+    }
+}
+
+class ToggleItemAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        val itemId = parameters[ITEM_ID_KEY] ?: return
+        val app = context.applicationContext as ChecklistApplication
+        app.repository.toggleItem(itemId)
+        // The application-scope observer performs the single debounced refresh.
     }
 }
 
 @Composable
-private fun WidgetContent(checklist: Checklist?) {
+private fun WidgetContent(checklist: Checklist?, openIntent: Intent) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
@@ -63,7 +94,9 @@ private fun WidgetContent(checklist: Checklist?) {
     ) {
         if (checklist == null) {
             Column(
-                modifier = GlanceModifier.fillMaxSize(),
+                modifier = GlanceModifier
+                    .fillMaxSize()
+                    .clickable(actionStartActivity(openIntent)),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -90,24 +123,30 @@ private fun WidgetContent(checklist: Checklist?) {
             val size = LocalSize.current
             val rowSet = widgetRows(checklist, maxWidgetRows(size.height.value))
 
-            Text(
-                text = checklist.title,
-                style = TextStyle(
-                    color = ColorProviderCompat(WidgetText),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
-                maxLines = 1,
-            )
-            Spacer(GlanceModifier.height(2.dp))
-            Text(
-                text = if (total == 0) "No items" else "$done/$total",
-                style = TextStyle(
-                    color = ColorProviderCompat(WidgetMuted),
-                    fontSize = 13.sp,
-                ),
-                maxLines = 1,
-            )
+            Column(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .clickable(actionStartActivity(openIntent)),
+            ) {
+                Text(
+                    text = checklist.title,
+                    style = TextStyle(
+                        color = ColorProviderCompat(WidgetText),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    maxLines = 1,
+                )
+                Spacer(GlanceModifier.height(2.dp))
+                Text(
+                    text = if (total == 0) "No items" else "$done/$total",
+                    style = TextStyle(
+                        color = ColorProviderCompat(WidgetMuted),
+                        fontSize = 13.sp,
+                    ),
+                    maxLines = 1,
+                )
+            }
             Spacer(GlanceModifier.height(10.dp))
             Spacer(
                 GlanceModifier
@@ -157,6 +196,11 @@ private fun WidgetItemRow(item: ChecklistItem) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
+            .clickable(
+                actionRunCallback<ToggleItemAction>(
+                    actionParametersOf(ITEM_ID_KEY to item.id),
+                ),
+            )
             .height(40.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

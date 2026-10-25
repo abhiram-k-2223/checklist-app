@@ -1,5 +1,6 @@
 package dev.abhiram.checklist
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,6 +13,7 @@ import androidx.compose.ui.Modifier
 import dev.abhiram.checklist.ui.ChecklistApp
 import dev.abhiram.checklist.ui.ChecklistViewModel
 import dev.abhiram.checklist.ui.theme.ChecklistTheme
+import dev.abhiram.checklist.widget.ChecklistWidget
 
 class MainActivity : ComponentActivity() {
 
@@ -23,6 +25,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        openFromIntent(intent)
         setContent {
             ChecklistTheme {
                 Surface(
@@ -33,5 +36,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openFromIntent(intent)
+    }
+
+    private fun openFromIntent(intent: Intent?) {
+        intent?.getStringExtra(ChecklistWidget.EXTRA_OPEN_CHECKLIST)
+            ?.let(viewModel::openChecklist)
     }
 }
