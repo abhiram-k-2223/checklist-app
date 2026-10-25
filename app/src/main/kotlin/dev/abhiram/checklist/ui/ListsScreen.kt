@@ -62,7 +62,11 @@ fun ListsScreen(
             TopAppBar(title = { Text("Checklists") })
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreate = true }) {
+            FloatingActionButton(
+                onClick = { showCreate = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_add),
                     contentDescription = "New checklist",
