@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,7 +64,7 @@ class ChecklistWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val repository = (context.applicationContext as ChecklistApplication).repository
-        val state = try {
+        val initialState = try {
             repository.snapshot()
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -69,13 +72,23 @@ class ChecklistWidget : GlanceAppWidget() {
             Log.e("ChecklistWidget", "Could not read widget state", error)
             AppState()
         }
-        val checklist = state.checklists.firstOrNull { it.isPinned }
-        val openIntent = Intent(context, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra(EXTRA_FROM_WIDGET, true)
-            checklist?.let { putExtra(EXTRA_OPEN_CHECKLIST, it.id) }
-        }
         provideContent {
+            // Glance does not restart provideGlance while a widget session is alive,
+            // so the repository must be observed inside the composition. Otherwise
+            // updates recompose against the list captured on the first render.
+            val state by repository.state.collectAsState(initial = initialState)
+            val checklist = state.checklists.firstOrNull { it.isPinned }
+            val openIntent = remember(checklist?.id) {
+                Intent(context, MainActivity::class.java).apply {
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                    )
+                    putExtra(EXTRA_FROM_WIDGET, true)
+                    checklist?.let { putExtra(EXTRA_OPEN_CHECKLIST, it.id) }
+                }
+            }
             WidgetContent(checklist = checklist, openIntent = openIntent)
         }
     }
