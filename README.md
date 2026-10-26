@@ -54,7 +54,9 @@ adb shell am start -n dev.abhiram.checklist/.MainActivity
   ViewModel awaits an update of every widget, and a widget tap updates its own
   widget before the action callback returns. Nothing observes or polls in the
   background.
-- The widget reads a repository snapshot once per render, never in a loop
+- The widget reads one initial snapshot per session, then observes the
+  repository's `StateFlow` inside the Glance composition; nothing polls in the
+  background
 - Data is one JSON document in Preferences DataStore, written only on explicit
   user actions
 - Vector drawables only; no bitmaps or decorative animations
@@ -84,7 +86,7 @@ export JAVA_HOME=/home/abhiram/.local/opt/jdk21
 ./gradlew test
 ```
 
-The suite has 45 tests covering the JSON codec, store rules, repository
+The suite has 44 tests covering the JSON codec, store rules, repository
 persistence, corrupt state recovery, widget row layout, widget toggle refresh,
 and ViewModel mutation success/error handling.
 
