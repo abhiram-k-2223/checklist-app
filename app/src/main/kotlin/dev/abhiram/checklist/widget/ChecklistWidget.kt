@@ -21,6 +21,8 @@ import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -37,6 +39,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import dev.abhiram.checklist.ChecklistApplication
 import dev.abhiram.checklist.MainActivity
 import dev.abhiram.checklist.R
@@ -45,7 +48,7 @@ import dev.abhiram.checklist.data.model.Checklist
 import dev.abhiram.checklist.data.model.ChecklistItem
 import kotlinx.coroutines.CancellationException
 
-private val WidgetBackground = Color(0xFF1C1C1E)
+private val WidgetBackground = Color(0xFF000000)
 private val WidgetSeparator = Color(0xFF2C2C2E)
 private val WidgetMuted = Color(0xFF8E8E93)
 private val WidgetText = Color(0xFFFFFFFF)
@@ -103,12 +106,15 @@ class ToggleItemAction : ActionCallback {
 
 @Composable
 private fun WidgetContent(checklist: Checklist?, openIntent: Intent) {
+    val compact = checklist != null && isCompactWidgetHeight(LocalSize.current.height.value)
+    val outerPadding = if (compact) 12.dp else 16.dp
+
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(ColorProviderCompat(WidgetBackground))
+            .background(ColorProvider(WidgetBackground))
             .cornerRadius(24.dp)
-            .padding(16.dp),
+            .padding(outerPadding),
     ) {
         if (checklist == null) {
             Column(
@@ -121,7 +127,7 @@ private fun WidgetContent(checklist: Checklist?, openIntent: Intent) {
                 Text(
                     text = "Pin a checklist",
                     style = TextStyle(
-                        color = ColorProviderCompat(WidgetText),
+                        color = ColorProvider(WidgetText),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                     ),
@@ -130,94 +136,121 @@ private fun WidgetContent(checklist: Checklist?, openIntent: Intent) {
                 Text(
                     text = "Open the app to choose one",
                     style = TextStyle(
-                        color = ColorProviderCompat(WidgetMuted),
+                        color = ColorProvider(WidgetMuted),
                         fontSize = 12.sp,
                     ),
                 )
             }
         } else {
-            val done = checklist.items.count { it.isDone }
-            val total = checklist.items.size
-            val size = LocalSize.current
-            val rowSet = widgetRows(checklist, maxWidgetRows(size.height.value))
+            val items = sortedWidgetItems(checklist.items)
 
-            Column(
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .clickable(actionStartActivity(openIntent)),
-            ) {
-                Text(
-                    text = checklist.title,
-                    style = TextStyle(
-                        color = ColorProviderCompat(WidgetText),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    maxLines = 1,
-                )
-                Spacer(GlanceModifier.height(2.dp))
-                Text(
-                    text = if (total == 0) "No items" else "$done/$total",
-                    style = TextStyle(
-                        color = ColorProviderCompat(WidgetMuted),
-                        fontSize = 13.sp,
-                    ),
-                    maxLines = 1,
-                )
-            }
-            Spacer(GlanceModifier.height(10.dp))
-            Spacer(
-                GlanceModifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(ColorProviderCompat(WidgetSeparator)),
-            )
+            WidgetHeader(checklist = checklist, compact = compact, openIntent = openIntent)
+            Spacer(GlanceModifier.height(if (compact) 6.dp else 10.dp))
+            WidgetDivider()
 
-            if (rowSet.visible.isEmpty()) {
+            if (items.isEmpty()) {
                 Spacer(GlanceModifier.height(10.dp))
                 Text(
-                    text = if (checklist.items.isEmpty()) {
-                        "Open app to add items"
-                    } else {
-                        "Open app to see items"
-                    },
+                    text = "Open app to add items",
                     modifier = GlanceModifier.clickable(actionStartActivity(openIntent)),
                     style = TextStyle(
-                        color = ColorProviderCompat(WidgetMuted),
+                        color = ColorProvider(WidgetMuted),
                         fontSize = 13.sp,
                     ),
                     maxLines = 1,
                 )
             } else {
-                rowSet.visible.forEach { item ->
-                    // Keep the divider inside each item container. Glance limits a
-                    // RemoteViews container to 10 direct children; with a flat list
-                    // the header plus row/divider pairs overflow that limit.
-                    Column {
-                        WidgetItemRow(item)
-                        Spacer(
-                            GlanceModifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(ColorProviderCompat(WidgetSeparator)),
-                        )
+                // A collection-backed LazyColumn can scroll in the widget and is
+                // not subject to the ten-direct-children limit of a plain Column.
+                LazyColumn(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .defaultWeight(),
+                ) {
+                    items(
+                        items = items,
+                        itemId = { item -> item.id.hashCode().toLong() },
+                    ) { item ->
+                        Column {
+                            WidgetItemRow(item)
+                            WidgetDivider()
+                        }
                     }
-                }
-                if (rowSet.hiddenCount > 0) {
-                    Spacer(GlanceModifier.height(6.dp))
-                    Text(
-                        text = "+${rowSet.hiddenCount} more",
-                        style = TextStyle(
-                            color = ColorProviderCompat(WidgetMuted),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                        ),
-                        maxLines = 1,
-                    )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun WidgetHeader(checklist: Checklist, compact: Boolean, openIntent: Intent) {
+    val done = checklist.items.count { it.isDone }
+    val total = checklist.items.size
+    val progress = if (total == 0) "No items" else "$done/$total"
+
+    if (compact) {
+        Row(
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .clickable(actionStartActivity(openIntent)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = checklist.title,
+                modifier = GlanceModifier.defaultWeight(),
+                style = TextStyle(
+                    color = ColorProvider(WidgetText),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                maxLines = 1,
+            )
+            Spacer(GlanceModifier.width(8.dp))
+            Text(
+                text = progress,
+                style = TextStyle(
+                    color = ColorProvider(WidgetMuted),
+                    fontSize = 12.sp,
+                ),
+                maxLines = 1,
+            )
+        }
+    } else {
+        Column(
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .clickable(actionStartActivity(openIntent)),
+        ) {
+            Text(
+                text = checklist.title,
+                style = TextStyle(
+                    color = ColorProvider(WidgetText),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                maxLines = 1,
+            )
+            Spacer(GlanceModifier.height(2.dp))
+            Text(
+                text = progress,
+                style = TextStyle(
+                    color = ColorProvider(WidgetMuted),
+                    fontSize = 13.sp,
+                ),
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WidgetDivider() {
+    Spacer(
+        GlanceModifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(ColorProvider(WidgetSeparator)),
+    )
 }
 
 @Composable
@@ -244,7 +277,7 @@ private fun WidgetItemRow(item: ChecklistItem) {
         Text(
             text = item.text,
             style = TextStyle(
-                color = ColorProviderCompat(if (item.isDone) WidgetMuted else WidgetText),
+                color = ColorProvider(if (item.isDone) WidgetMuted else WidgetText),
                 fontSize = 15.sp,
                 textDecoration = if (item.isDone) TextDecoration.LineThrough else null,
             ),
@@ -252,5 +285,3 @@ private fun WidgetItemRow(item: ChecklistItem) {
         )
     }
 }
-
-private fun ColorProviderCompat(color: Color) = androidx.glance.unit.ColorProvider(color)

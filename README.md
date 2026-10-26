@@ -10,7 +10,9 @@ one pinned checklist and lets you tick items off without opening the app.
 - Add, edit, toggle, and delete items
 - The widget shows unchecked items before completed items
 - Resizable Glance widget (default 4×4, minimum 2×2, no artificial maximum)
+- Always-dark night theme: the app ignores the system light setting
 - Flat iOS-style dark widget theme
+- Scrollable widget list; visible rows adapt to the resized height
 - Widget rows toggle items in place; the widget header opens that checklist
 - Local-only data in Preferences DataStore; no accounts, network, or analytics
 - Built for low-end phones: no polling or background services, an awaited
@@ -105,8 +107,8 @@ small and builds quickly on a low-memory machine.
 - No widget text entry
 - Widget taps toggle items only; all editing happens in the app
 - Widget text caps at two lines and clips overflow because Glance 1.2 has no
-  ellipsis API; a 2×2 widget may show a compact “Open app” prompt instead of rows
-- The widget shows at most eight rows and a `+N more` line because Glance
-  RemoteViews limits a container to ten direct children
+  ellipsis API
+- In-widget scrolling depends on launcher support; unsupported launchers still
+  show the visible rows but cannot scroll to the rest
 - “Local-only” means the app has no network permission or sync; Android’s OS
   backup setting may still include app data if enabled on the device

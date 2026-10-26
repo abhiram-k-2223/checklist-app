@@ -1,9 +1,7 @@
 package dev.abhiram.checklist.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
@@ -23,23 +21,10 @@ private val DarkColors = darkColorScheme(
     error = Color(0xFFFF453A),
 )
 
-private val LightColors = lightColorScheme(
-    primary = IosBlue,
-    onPrimary = Color.White,
-    background = Color(0xFFF2F2F7),
-    onBackground = Color.Black,
-    surface = Color.White,
-    onSurface = Color.Black,
-    surfaceVariant = Color(0xFFE5E5EA),
-    onSurfaceVariant = Color(0xFF6C6C70),
-    outline = Color(0xFFC7C7CC),
-    error = Color(0xFFFF3B30),
-)
-
 @Composable
 fun ChecklistTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
+        colorScheme = DarkColors,
         content = content,
     )
 }
