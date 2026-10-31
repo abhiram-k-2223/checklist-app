@@ -31,7 +31,10 @@ object ChecklistStore {
     }
 
     fun deleteChecklist(state: AppState, id: String): AppState =
-        state.copy(checklists = state.checklists.filterNot { it.id == id })
+        state.copy(
+            checklists = state.checklists.filterNot { it.id == id },
+            widgetBindings = state.widgetBindings.filterValues { it != id },
+        )
 
     fun setPinned(state: AppState, id: String?, now: Long): AppState {
         val targetExists = id != null && state.checklists.any { it.id == id }

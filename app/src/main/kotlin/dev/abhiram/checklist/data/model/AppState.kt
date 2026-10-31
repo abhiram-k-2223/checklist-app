@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 data class AppState(
     val version: Int = 1,
     val checklists: List<Checklist> = emptyList(),
+    val widgetBindings: Map<String, String> = emptyMap(),
 )
 
 @Serializable

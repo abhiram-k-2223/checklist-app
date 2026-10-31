@@ -34,6 +34,25 @@ class AppStateJsonTest {
     }
 
     @Test
+    fun `widget bindings survive a json round trip`() {
+        val state = AppState(widgetBindings = mapOf("7" to "c1"))
+
+        assertEquals(state, ChecklistJson.decode(ChecklistJson.encode(state)))
+    }
+
+    @Test
+    fun `old json without widget bindings decodes to an empty map`() {
+        val decoded = ChecklistJson.tryDecode(
+            """{"version":1,"checklists":[]}""",
+        )
+
+        assertNotNull(decoded)
+        val state = decoded!!
+        assertEquals(1, state.version)
+        assertTrue(state.widgetBindings.isEmpty())
+    }
+
+    @Test
     fun `unknown keys are ignored`() {
         val decoded = ChecklistJson.tryDecode(
             """{"version":1,"checklists":[],"future":true}""",
