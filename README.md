@@ -1,11 +1,18 @@
 # Checklist
 
-A local-only Android checklist app with a home-screen widget. The widget shows
-one pinned checklist and lets you tick items off without opening the app.
+A local-only Android checklist app with home-screen widgets. Each widget shows
+the checklist you choose for it and lets you tick items off without opening the
+app. Pin marks the default/fallback checklist for legacy or unconfigured
+widgets.
 
 ## Features
 
 - Multiple checklists with create, rename, delete, and pin
+- Any number of widgets, each bound to the checklist you choose for it
+- Widget picker lists every checklist, with the pinned one first and badged
+- Pin is only the default/fallback; it never filters the picker or overrides a
+  widget's own binding
+- Reconfigure any widget on Android 12+ without removing it
 - One pinned checklist at a time; pinning another unpins the previous one
 - Add, edit, toggle, and delete items
 - The widget shows unchecked items before completed items
@@ -25,6 +32,7 @@ Requires JDK 21 and the Android SDK with platform 37.
 
 ```bash
 export JAVA_HOME=/home/abhiram/.local/opt/jdk21
+export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew :app:assembleDebug
 ./gradlew :app:assembleRelease
 ```
@@ -74,29 +82,40 @@ adb shell top -b -n 1 | grep dev.abhiram.checklist
 
 ## Add the widget
 
-1. Pin a checklist from the list menu in the app.
-2. Long-press the home screen and open **Widgets**.
-3. Find **Checklist** and drag it onto the home screen.
-4. Resize it by long-pressing and dragging the handles.
+1. Long-press the home screen and open **Widgets**.
+2. Find **Checklist** and drag it onto the home screen.
+3. Pick any checklist in the picker. The pinned checklist is listed first with
+   a pin badge, but every checklist is selectable.
+4. Repeat for more widgets; each one keeps its own checklist.
+5. To change an existing widget on Android 12+, long-press it and choose
+   **Reconfigure**.
+
+Pinning is no longer required to add a widget. Existing widgets created before
+per-widget selection bind to the pinned checklist on first render, so a
+Groceries widget keeps showing Groceries.
 
 ## Tests
 
 ```bash
 export JAVA_HOME=/home/abhiram/.local/opt/jdk21
+export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew test
 ```
 
-The suite has 44 tests covering the JSON codec, store rules, repository
-persistence, corrupt state recovery, widget row layout, widget toggle refresh,
-and ViewModel mutation success/error handling.
+The suite has 74 tests covering the JSON codec, store rules, repository
+persistence, corrupt state recovery, per-widget binding and migration, picker
+ordering and progress, widget row layout, widget toggle refresh, and ViewModel
+mutation success/error handling.
 
 ## Architecture
 
 - `data/model` — serializable `AppState`, `Checklist`, `ChecklistItem`
 - `data/ChecklistStore` — pure state transformations
+- `data/WidgetBindings` — per-widget binding helpers and migration target
 - `data/DefaultChecklistRepository` — atomic DataStore updates
 - `ui` — Compose screens and `ChecklistViewModel`
-- `widget` — Glance renderer, row math, and toggle action callback
+- `widget` — Glance renderer, picker configuration activity, legacy migration,
+  row math, and toggle action callback
 - `ChecklistApplication` — manual DI container and lazy WorkManager
   configuration; the ViewModel triggers widget refreshes after mutations
 
@@ -112,5 +131,9 @@ small and builds quickly on a low-memory machine.
   ellipsis API
 - In-widget scrolling depends on launcher support; unsupported launchers still
   show the visible rows but cannot scroll to the rest
+- Widget bindings use launcher-assigned app-widget IDs; clearing app data or
+  switching launchers resets them
+- Reconfiguration requires Android 12+; older launchers may need the widget
+  removed and re-added
 - “Local-only” means the app has no network permission or sync; Android’s OS
   backup setting may still include app data if enabled on the device
