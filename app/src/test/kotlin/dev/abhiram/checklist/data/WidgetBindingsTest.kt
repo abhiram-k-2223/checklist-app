@@ -164,4 +164,15 @@ class WidgetBindingsTest {
         assertNull(bindingMigrationTarget(bindWidget(initial, 7, "todo"), 7))
         assertNull(bindingMigrationTarget(stateOf(list("groceries")), 7))
     }
+
+    @Test
+    fun `migration plan skips bound widgets and the widget being configured`() {
+        val targets = unboundWidgetIds(
+            bindings = mapOf("7" to "groceries"),
+            appWidgetIds = listOf(7, 8, 9),
+            excludingAppWidgetId = 9,
+        )
+
+        assertEquals(listOf(8), targets)
+    }
 }

@@ -44,3 +44,16 @@ fun bindingMigrationTarget(state: AppState, appWidgetId: Int): String? {
     if (state.widgetBindings.containsKey(appWidgetId.toString())) return null
     return state.checklists.firstOrNull { it.isPinned }?.id
 }
+
+/**
+ * Returns the app-widget IDs that still need the one-time legacy migration.
+ * Bound widgets are skipped, and the widget currently being configured can be
+ * excluded so cancelling the picker leaves it untouched.
+ */
+fun unboundWidgetIds(
+    bindings: Map<String, String>,
+    appWidgetIds: List<Int>,
+    excludingAppWidgetId: Int? = null,
+): List<Int> = appWidgetIds.filter { appWidgetId ->
+    appWidgetId != excludingAppWidgetId && !bindings.containsKey(appWidgetId.toString())
+}

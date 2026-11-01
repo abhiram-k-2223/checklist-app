@@ -2,4 +2,9 @@
 <resources>
     <string name="app_name">Checklist</string>
     <string name="widget_label">Checklist</string>
+    <string name="widget_config_title">Choose a checklist</string>
+    <string name="widget_config_pinned">Pinned checklist</string>
+    <string name="widget_config_empty_title">No checklists yet</string>
+    <string name="widget_config_empty_body">Open the app to create a checklist.</string>
+    <string name="widget_config_open_app">Open app</string>
 </resources>
