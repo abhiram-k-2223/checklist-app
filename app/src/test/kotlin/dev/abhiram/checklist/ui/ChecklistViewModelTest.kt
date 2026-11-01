@@ -32,6 +32,12 @@ class ChecklistViewModelTest {
 
         override suspend fun setPinned(id: String?) = throw IOException("fail")
 
+        override suspend fun setWidgetBinding(appWidgetId: Int, checklistId: String) =
+            throw IOException("fail")
+
+        override suspend fun removeWidgetBinding(appWidgetId: Int) =
+            throw IOException("fail")
+
         override suspend fun addItem(checklistId: String, text: String): String = throw IOException("fail")
 
         override suspend fun updateItem(itemId: String, text: String) = throw IOException("fail")
@@ -53,6 +59,10 @@ class ChecklistViewModelTest {
         override suspend fun deleteChecklist(id: String) = Unit
 
         override suspend fun setPinned(id: String?) = Unit
+
+        override suspend fun setWidgetBinding(appWidgetId: Int, checklistId: String) = Unit
+
+        override suspend fun removeWidgetBinding(appWidgetId: Int) = Unit
 
         override suspend fun addItem(checklistId: String, text: String): String = "id"
 

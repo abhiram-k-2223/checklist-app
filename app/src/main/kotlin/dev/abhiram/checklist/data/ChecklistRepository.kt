@@ -10,6 +10,8 @@ interface ChecklistRepository {
     suspend fun renameChecklist(id: String, title: String)
     suspend fun deleteChecklist(id: String)
     suspend fun setPinned(id: String?)
+    suspend fun setWidgetBinding(appWidgetId: Int, checklistId: String)
+    suspend fun removeWidgetBinding(appWidgetId: Int)
     suspend fun addItem(checklistId: String, text: String): String
     suspend fun updateItem(itemId: String, text: String)
     suspend fun toggleItem(itemId: String)

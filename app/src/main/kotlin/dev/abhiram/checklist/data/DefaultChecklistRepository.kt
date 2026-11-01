@@ -63,6 +63,14 @@ class DefaultChecklistRepository(
         mutate { ChecklistStore.setPinned(it, id, now()) }
     }
 
+    override suspend fun setWidgetBinding(appWidgetId: Int, checklistId: String) {
+        mutate { bindWidget(it, appWidgetId, checklistId) }
+    }
+
+    override suspend fun removeWidgetBinding(appWidgetId: Int) {
+        mutate { unbindWidget(it, appWidgetId) }
+    }
+
     override suspend fun addItem(checklistId: String, text: String): String {
         val id = newId()
         mutate { ChecklistStore.addItem(it, checklistId, id, text, now()) }

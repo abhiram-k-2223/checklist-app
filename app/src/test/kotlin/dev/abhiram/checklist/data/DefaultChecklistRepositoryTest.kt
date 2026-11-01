@@ -99,6 +99,45 @@ class DefaultChecklistRepositoryTest {
     }
 
     @Test
+    fun `widget binding is persisted`() = runTest {
+        val persistence = FakePersistence(ChecklistJson.encode(initialState()))
+        val repository = DefaultChecklistRepository(persistence, backgroundScope)
+
+        repository.setWidgetBinding(42, "c2")
+
+        val state = ChecklistJson.decode(persistence.raw.value)
+        assertEquals(mapOf("42" to "c2"), state.widgetBindings)
+    }
+
+    @Test
+    fun `widget binding removal is persisted`() = runTest {
+        val initial = initialState().copy(
+            widgetBindings = mapOf("42" to "c2", "43" to "c1"),
+        )
+        val persistence = FakePersistence(ChecklistJson.encode(initial))
+        val repository = DefaultChecklistRepository(persistence, backgroundScope)
+
+        repository.removeWidgetBinding(42)
+
+        val state = ChecklistJson.decode(persistence.raw.value)
+        assertEquals(mapOf("43" to "c1"), state.widgetBindings)
+    }
+
+    @Test
+    fun `deleting a checklist removes its persisted widget bindings`() = runTest {
+        val initial = initialState().copy(
+            widgetBindings = mapOf("42" to "c2", "43" to "c1"),
+        )
+        val persistence = FakePersistence(ChecklistJson.encode(initial))
+        val repository = DefaultChecklistRepository(persistence, backgroundScope)
+
+        repository.deleteChecklist("c2")
+
+        val state = ChecklistJson.decode(persistence.raw.value)
+        assertEquals(mapOf("43" to "c1"), state.widgetBindings)
+    }
+
+    @Test
     fun `corrupt raw state is backed up before replacement`() = runTest {
         val persistence = FakePersistence("{broken")
         val repository = DefaultChecklistRepository(
