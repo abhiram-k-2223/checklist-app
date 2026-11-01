@@ -34,3 +34,13 @@ fun checklistForWidget(state: AppState, appWidgetId: Int): Checklist? {
     }
     return state.checklists.firstOrNull { it.isPinned }
 }
+
+/**
+ * Returns the pinned checklist ID when this widget has no binding yet, or null
+ * when it is already bound or nothing is pinned. Used for one-time legacy
+ * migration; it never overrides an existing binding.
+ */
+fun bindingMigrationTarget(state: AppState, appWidgetId: Int): String? {
+    if (state.widgetBindings.containsKey(appWidgetId.toString())) return null
+    return state.checklists.firstOrNull { it.isPinned }?.id
+}

@@ -155,4 +155,13 @@ class WidgetBindingsTest {
 
         assertEquals("groceries", checklistForWidget(state, 8)?.id)
     }
+
+    @Test
+    fun `migration target is the pin only while the widget is unbound`() {
+        val initial = stateOf(list("groceries", pinned = true), list("todo"))
+
+        assertEquals("groceries", bindingMigrationTarget(initial, 7))
+        assertNull(bindingMigrationTarget(bindWidget(initial, 7, "todo"), 7))
+        assertNull(bindingMigrationTarget(stateOf(list("groceries")), 7))
+    }
 }

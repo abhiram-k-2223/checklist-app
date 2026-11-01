@@ -19,6 +19,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
@@ -46,6 +47,7 @@ import androidx.glance.unit.ColorProvider
 import dev.abhiram.checklist.ChecklistApplication
 import dev.abhiram.checklist.MainActivity
 import dev.abhiram.checklist.R
+import dev.abhiram.checklist.data.checklistForWidget
 import dev.abhiram.checklist.data.model.AppState
 import dev.abhiram.checklist.data.model.Checklist
 import dev.abhiram.checklist.data.model.ChecklistItem
@@ -64,6 +66,7 @@ class ChecklistWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val repository = (context.applicationContext as ChecklistApplication).repository
+        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
         val initialState = try {
             repository.snapshot()
         } catch (cancelled: CancellationException) {
@@ -72,12 +75,26 @@ class ChecklistWidget : GlanceAppWidget() {
             Log.e("ChecklistWidget", "Could not read widget state", error)
             AppState()
         }
+        val initial = try {
+            migrateWidgetBinding(
+                state = initialState,
+                appWidgetId = appWidgetId,
+                setBinding = { widgetId, checklistId ->
+                    repository.setWidgetBinding(widgetId, checklistId)
+                },
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.e("ChecklistWidget", "Could not migrate widget binding", error)
+            initialState
+        }
         provideContent {
             // Glance does not restart provideGlance while a widget session is alive,
             // so the repository must be observed inside the composition. Otherwise
             // updates recompose against the list captured on the first render.
-            val state by repository.state.collectAsState(initial = initialState)
-            val checklist = state.checklists.firstOrNull { it.isPinned }
+            val state by repository.state.collectAsState(initial = initial)
+            val checklist = checklistForWidget(state, appWidgetId)
             val openIntent = remember(checklist?.id) {
                 Intent(context, MainActivity::class.java).apply {
                     addFlags(
@@ -91,6 +108,19 @@ class ChecklistWidget : GlanceAppWidget() {
             }
             WidgetContent(checklist = checklist, openIntent = openIntent)
         }
+    }
+
+    override suspend fun onDelete(context: Context, glanceId: GlanceId) {
+        val repository = (context.applicationContext as ChecklistApplication).repository
+        try {
+            val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
+            repository.removeWidgetBinding(appWidgetId)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.e("ChecklistWidget", "Could not remove widget binding", error)
+        }
+        super.onDelete(context, glanceId)
     }
 
     companion object {
