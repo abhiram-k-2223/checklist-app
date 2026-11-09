@@ -49,10 +49,11 @@ or legacy widgets and never filters the picker or overrides an existing binding.
   **BUILD SUCCESSFUL**, 13 XML result files, **76 tests, 0 failures, 0 errors,
   0 skipped**.
 - **Builds:** `./gradlew :app:assembleDebug :app:assembleRelease` —
-  **BUILD SUCCESSFUL** in 2m 3s.
+  **BUILD SUCCESSFUL** in 2m 3s. After the final review fixes, the release was
+  rebuilt with `./gradlew :app:assembleRelease` — **BUILD SUCCESSFUL** in 2m 8s.
 - **Release APK:** `app/build/outputs/apk/release/app-release.apk`, **2.2 MB**,
   SHA-256
-  `0f2bc226642af37894929357e9516f1b9a4cae3900e863813fb95a52b484d5f2`.
+  `e84ef692477e3e13c9c7e5c97d9b87367199ece491ca0211b26ffffb5f98beba`.
 - **Merged manifest:** `ChecklistWidgetConfigActivity` appears in the merged
   debug manifests under
   `app/build/intermediates/merged_manifest/debug/processDebugMainManifest/`,
