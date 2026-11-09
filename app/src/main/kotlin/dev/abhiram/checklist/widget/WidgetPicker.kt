@@ -44,7 +44,7 @@ fun WidgetPicker(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items(checklists, key = { it.id }) { checklist ->
+        items(pickerChecklists(checklists), key = { it.id }) { checklist ->
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()

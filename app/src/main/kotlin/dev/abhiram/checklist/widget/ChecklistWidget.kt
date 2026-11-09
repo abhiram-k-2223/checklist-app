@@ -80,7 +80,7 @@ class ChecklistWidget : GlanceAppWidget() {
                 state = initialState,
                 appWidgetId = appWidgetId,
                 setBinding = { widgetId, checklistId ->
-                    repository.setWidgetBinding(widgetId, checklistId)
+                    repository.setWidgetBindingIfUnbound(widgetId, checklistId)
                 },
             )
         } catch (cancelled: CancellationException) {

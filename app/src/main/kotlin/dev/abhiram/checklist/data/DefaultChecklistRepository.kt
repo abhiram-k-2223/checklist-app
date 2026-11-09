@@ -67,6 +67,16 @@ class DefaultChecklistRepository(
         mutate { bindWidget(it, appWidgetId, checklistId) }
     }
 
+    override suspend fun setWidgetBindingIfUnbound(appWidgetId: Int, checklistId: String) {
+        mutate { state ->
+            if (state.widgetBindings.containsKey(appWidgetId.toString())) {
+                state
+            } else {
+                bindWidget(state, appWidgetId, checklistId)
+            }
+        }
+    }
+
     override suspend fun removeWidgetBinding(appWidgetId: Int) {
         mutate { unbindWidget(it, appWidgetId) }
     }

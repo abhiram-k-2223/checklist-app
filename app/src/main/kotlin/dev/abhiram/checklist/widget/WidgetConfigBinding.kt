@@ -40,6 +40,6 @@ suspend fun migrateUnboundWidgets(
         appWidgetIds = appWidgetIds,
         excludingAppWidgetId = excludingAppWidgetId,
     ).forEach { appWidgetId ->
-        repository.setWidgetBinding(appWidgetId, pinned.id)
+        repository.setWidgetBindingIfUnbound(appWidgetId, pinned.id)
     }
 }

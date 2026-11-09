@@ -110,6 +110,29 @@ class DefaultChecklistRepositoryTest {
     }
 
     @Test
+    fun `binding if unbound preserves an existing binding`() = runTest {
+        val initial = initialState().copy(widgetBindings = mapOf("42" to "c2"))
+        val persistence = FakePersistence(ChecklistJson.encode(initial))
+        val repository = DefaultChecklistRepository(persistence, backgroundScope)
+
+        repository.setWidgetBindingIfUnbound(42, "c1")
+
+        val state = ChecklistJson.decode(persistence.raw.value)
+        assertEquals(mapOf("42" to "c2"), state.widgetBindings)
+    }
+
+    @Test
+    fun `binding if unbound writes when the widget has no binding`() = runTest {
+        val persistence = FakePersistence(ChecklistJson.encode(initialState()))
+        val repository = DefaultChecklistRepository(persistence, backgroundScope)
+
+        repository.setWidgetBindingIfUnbound(42, "c2")
+
+        val state = ChecklistJson.decode(persistence.raw.value)
+        assertEquals(mapOf("42" to "c2"), state.widgetBindings)
+    }
+
+    @Test
     fun `widget binding removal is persisted`() = runTest {
         val initial = initialState().copy(
             widgetBindings = mapOf("42" to "c2", "43" to "c1"),
