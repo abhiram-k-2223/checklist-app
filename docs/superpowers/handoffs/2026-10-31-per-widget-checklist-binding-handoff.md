@@ -1,9 +1,9 @@
 # Per-Widget Checklist Binding Handoff
 
-**Date:** 2026-11-01
+**Date:** 2026-11-09
 **Repository:** https://github.com/abhiram-k-2223/checklist-app (private)
 **Branch:** `master`
-**Implementation range:** `126c2ef..0333803`
+**Implementation range:** `126c2ef..4b8a8bc`
 **Phone:** `GAKNWKGQJJJ7QWXW` (Android 14 / API 34, 720×1600, density 320)
 
 ## What changed
@@ -20,9 +20,12 @@ showing the globally pinned checklist.
   silently falling back to a different checklist.
 - `ChecklistStore.deleteChecklist` removes every binding that points at the
   deleted checklist.
-- `ChecklistRepository` exposes `setWidgetBinding(appWidgetId, checklistId)` and
-  `removeWidgetBinding(appWidgetId)`. `DefaultChecklistRepository` persists both
-  through the existing JSON/DataStore mutation path.
+- `ChecklistRepository` exposes `setWidgetBinding(appWidgetId, checklistId)`,
+  `setWidgetBindingIfUnbound(appWidgetId, checklistId)`, and
+  `removeWidgetBinding(appWidgetId)`. `DefaultChecklistRepository` persists them
+  through the existing JSON/DataStore mutation path. Migration uses the
+  if-unbound variant so a pin can never overwrite an explicit selection made
+  concurrently.
 - `ChecklistWidget` resolves its own app-widget ID, migrates an unbound legacy
   widget to the currently pinned checklist once, observes repository state, and
   renders through `checklistForWidget`. `onDelete` removes the binding.
@@ -43,7 +46,7 @@ or legacy widgets and never filters the picker or overrides an existing binding.
 ## Verification performed
 
 - **Unit tests:** `./gradlew :app:testDebugUnitTest --rerun-tasks` —
-  **BUILD SUCCESSFUL**, 13 XML result files, **74 tests, 0 failures, 0 errors,
+  **BUILD SUCCESSFUL**, 13 XML result files, **76 tests, 0 failures, 0 errors,
   0 skipped**.
 - **Builds:** `./gradlew :app:assembleDebug :app:assembleRelease` —
   **BUILD SUCCESSFUL** in 2m 3s.
@@ -58,7 +61,21 @@ or legacy widgets and never filters the picker or overrides an existing binding.
 - **Provider XML:** both `android:configure` and
   `android:widgetFeatures="reconfigurable"` are present.
 - **Git:** private repository created and `master` pushed. `origin/master`
-  points at `0333803` before the handoff commit.
+  points at `4b8a8bc` before the handoff commit.
+
+## Final review fixes
+
+A fresh whole-branch review found two Important issues. Both were fixed with
+TDD and are included in `4b8a8bc`:
+
+- The picker now renders through `pickerChecklists`, so the pinned checklist is
+  actually first. The previous helper was tested but unused by the composable.
+- Migration now uses `setWidgetBindingIfUnbound`, which checks the current
+  DataStore state inside the mutation, so a concurrent explicit selection cannot
+  be overwritten by the pin.
+
+Minor findings deferred: config selection coroutine error handling; late
+`onDelete` after app-widget ID reuse; additional activity/manifest test coverage.
 
 ## On-device verification: pending
 
