@@ -8,6 +8,8 @@ data class AppState(
     val version: Int = 1,
     val checklists: List<Checklist> = emptyList(),
     val widgetBindings: Map<String, String> = emptyMap(),
+    val streakTrackers: List<StreakTracker> = emptyList(),
+    val streakWidgetBindings: Map<String, String> = emptyMap(),
 )
 
 @Serializable
