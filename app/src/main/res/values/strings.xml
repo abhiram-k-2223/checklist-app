@@ -7,4 +7,8 @@
     <string name="widget_config_empty_title">No checklists yet</string>
     <string name="widget_config_empty_body">Open the app to create a checklist.</string>
     <string name="widget_config_open_app">Open app</string>
+    <string name="streak_widget_label">Streak</string>
+    <string name="streak_widget_config_title">Choose a streak tracker</string>
+    <string name="streak_widget_config_empty_title">No streak trackers yet</string>
+    <string name="streak_widget_config_empty_body">Open the app to create a streak tracker.</string>
 </resources>
