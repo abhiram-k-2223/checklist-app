@@ -1,9 +1,9 @@
 # Checklist
 
-A local-only Android checklist app with home-screen widgets. Each widget shows
-the checklist you choose for it and lets you tick items off without opening the
-app. Pin marks the default/fallback checklist for legacy or unconfigured
-widgets.
+A local-only Android app for checklists and daily streaks, with home-screen
+widgets. Checklist widgets show the checklist you choose for them and let you
+tick items off without opening the app. Streak widgets show a current-month
+calendar and today's colored streak tasks.
 
 ## Features
 
@@ -21,6 +21,14 @@ widgets.
 - Flat iOS-style dark widget theme
 - Scrollable widget list; visible rows adapt to the resized height
 - Widget rows toggle items in place; the widget header opens that checklist
+- Multiple named streak trackers, each with up to four daily tasks
+- Each streak task has a unique color and its own current streak
+- Dark Streak widget with a current-month calendar, colored completion dots,
+  today's highlight, and checkable task rows with compact streak counts
+- Choose a tracker when adding a Streak widget; reconfigure it later on
+  Android 12+
+- Deleting a streak task removes its calendar dots and streak history;
+  deleting a tracker unbinds its widgets
 - Local-only data in Preferences DataStore; no accounts, network, or analytics
 - Built for low-end phones: no polling or background services, an awaited
   widget refresh after app mutations plus an in-callback update for widget
@@ -53,15 +61,16 @@ adb shell am start -n dev.abhiram.checklist/.MainActivity
 
 ## Low-resource design
 
-- One Activity and one process; no services, alarms, scheduled background
-  jobs, or polling
+- One Activity and one process; no services, alarms, or polling. One daily
+  WorkManager job refreshes streak widgets just after local midnight; it never
+  resets completion history.
 - Glance bundles WorkManager for async widget requests, but its startup
-  initializer is disabled; WorkManager starts only if a widget request needs
-  it, and this app schedules no background work
-- The widget uses `updatePeriodMillis=0`; after a successful app mutation the
-  ViewModel awaits an update of every widget, and a widget tap updates its own
-  widget before the action callback returns. Nothing observes or polls in the
-  background.
+  initializer is disabled; WorkManager starts only when a widget request or the
+  daily streak rollover needs it
+- Both widgets use `updatePeriodMillis=0`; after a successful app mutation the
+  ViewModel awaits an update of every widget of that type, and a widget tap
+  updates its own widget before the action callback returns. The streak widget
+  also refreshes once just after local midnight.
 - The widget reads one initial snapshot per session, then observes the
   repository's `StateFlow` inside the Glance composition; nothing polls in the
   background
@@ -80,7 +89,7 @@ adb shell dumpsys meminfo dev.abhiram.checklist
 adb shell top -b -n 1 | grep dev.abhiram.checklist
 ```
 
-## Add the widget
+## Add the widgets
 
 1. Long-press the home screen and open **Widgets**.
 2. Find **Checklist** and drag it onto the home screen.
@@ -94,6 +103,16 @@ Pinning is no longer required to add a widget. Existing widgets created before
 per-widget selection bind to the pinned checklist on first render, so a
 Groceries widget keeps showing Groceries.
 
+### Streak widget
+
+1. Long-press the home screen and open **Widgets**.
+2. Find **Streak** and drag it onto the home screen.
+3. Pick any streak tracker in the picker. Every tracker is listed in creation
+   order.
+4. Repeat for more widgets; each one keeps its own tracker.
+5. To change an existing widget on Android 12+, long-press it and choose
+   **Reconfigure**. Back cancels without changing the binding.
+
 ## Tests
 
 ```bash
@@ -102,22 +121,28 @@ export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew test
 ```
 
-The suite has 74 tests covering the JSON codec, store rules, repository
-persistence, corrupt state recovery, per-widget binding and migration, picker
-ordering and progress, widget row layout, widget toggle refresh, and ViewModel
-mutation success/error handling.
+The suite has 146 tests covering the JSON codec, checklist and streak store
+rules, repository persistence, corrupt state recovery, per-widget checklist
+binding and migration, streak calculation and calendar layout, streak widget
+rows and picker, midnight rollover timing, and ViewModel mutation success/error
+handling.
 
 ## Architecture
 
-- `data/model` — serializable `AppState`, `Checklist`, `ChecklistItem`
-- `data/ChecklistStore` — pure state transformations
-- `data/WidgetBindings` — per-widget binding helpers and migration target
+- `data/model` — serializable `AppState`, `Checklist`, `ChecklistItem`,
+  `StreakTracker`, `StreakTask`, and `StreakColor`
+- `data/ChecklistStore` — pure checklist state transformations
+- `data/StreakStore` — pure tracker, task, and streak-widget binding rules
+- `data/StreakCalendar` — current-streak and six-week calendar helpers
+- `data/WidgetBindings` — per-widget checklist binding helpers and migration
 - `data/DefaultChecklistRepository` — atomic DataStore updates
-- `ui` — Compose screens and `ChecklistViewModel`
-- `widget` — Glance renderer, picker configuration activity, legacy migration,
-  row math, and toggle action callback
-- `ChecklistApplication` — manual DI container and lazy WorkManager
-  configuration; the ViewModel triggers widget refreshes after mutations
+- `ui` — Compose screens, `ChecklistViewModel`, and `StreakViewModel`
+- `widget` — Glance checklist and streak renderers, picker configuration
+  activities, legacy migration, row math, toggle actions, and the daily streak
+  rollover
+- `ChecklistApplication` — manual DI container, lazy WorkManager configuration,
+  and streak rollover scheduling; ViewModels trigger widget refreshes after
+  mutations
 
 There is no Room, KSP, Hilt, or navigation library; the app is intentionally
 small and builds quickly on a low-memory machine.
@@ -137,3 +162,9 @@ small and builds quickly on a low-memory machine.
   removed and re-added
 - “Local-only” means the app has no network permission or sync; Android’s OS
   backup setting may still include app data if enabled on the device
+- Streak trackers show the current streak only; there is no best-streak metric
+- The Streak widget shows the current month only and has no month navigation
+- Streak trackers and tasks keep creation order; there is no drag reorder
+- Deleting a streak task permanently removes its calendar dots and history
+- The daily rollover may be delayed by the system; the widget still derives
+  today's date whenever it renders
