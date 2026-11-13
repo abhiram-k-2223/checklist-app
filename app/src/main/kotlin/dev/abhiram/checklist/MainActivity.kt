@@ -13,9 +13,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import dev.abhiram.checklist.ui.ChecklistApp
 import dev.abhiram.checklist.ui.ChecklistViewModel
+import dev.abhiram.checklist.ui.StreakViewModel
 import dev.abhiram.checklist.ui.theme.ChecklistTheme
 import dev.abhiram.checklist.widget.ChecklistWidget
+import dev.abhiram.checklist.widget.StreakWidget
 import dev.abhiram.checklist.widget.updateChecklistWidgets
+import dev.abhiram.checklist.widget.updateStreakWidgets
 
 class MainActivity : ComponentActivity() {
 
@@ -25,6 +28,15 @@ class MainActivity : ComponentActivity() {
             owner = this,
             repository = app.repository,
             refreshWidgets = { updateChecklistWidgets(applicationContext) },
+        )
+    }
+
+    private val streakViewModel: StreakViewModel by viewModels {
+        val app = application as ChecklistApplication
+        StreakViewModel.factory(
+            owner = this,
+            repository = app.repository,
+            refreshWidgets = { updateStreakWidgets(applicationContext) },
         )
     }
 
@@ -43,7 +55,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    ChecklistApp(viewModel)
+                    ChecklistApp(viewModel, streakViewModel)
                 }
             }
         }
@@ -57,11 +69,20 @@ class MainActivity : ComponentActivity() {
 
     private fun openFromIntent(intent: Intent?) {
         val source = intent ?: return
+
+        if (source.getBooleanExtra(StreakWidget.EXTRA_FROM_WIDGET, false)) {
+            viewModel.closeChecklist()
+            streakViewModel.closeTracker()
+            source.removeExtra(StreakWidget.EXTRA_FROM_WIDGET)
+            return
+        }
+
         val launch = widgetLaunch(
             fromWidget = source.getBooleanExtra(ChecklistWidget.EXTRA_FROM_WIDGET, false),
             checklistId = source.getStringExtra(ChecklistWidget.EXTRA_OPEN_CHECKLIST),
         ) ?: return
 
+        streakViewModel.closeTracker()
         if (launch.checklistId == null) {
             viewModel.closeChecklist()
         } else {
