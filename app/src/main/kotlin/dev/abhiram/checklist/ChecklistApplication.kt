@@ -10,6 +10,7 @@ import androidx.work.Configuration
 import dev.abhiram.checklist.data.ChecklistRepository
 import dev.abhiram.checklist.data.DataStoreStatePersistence
 import dev.abhiram.checklist.data.DefaultChecklistRepository
+import dev.abhiram.checklist.widget.scheduleStreakRollover
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,4 +39,8 @@ class ChecklistApplication : Application(), Configuration.Provider {
         )
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        scheduleStreakRollover(this)
+    }
 }
