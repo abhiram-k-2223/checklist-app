@@ -2,6 +2,8 @@ package dev.abhiram.checklist.data
 
 import dev.abhiram.checklist.data.model.AppState
 import dev.abhiram.checklist.data.model.ChecklistJson
+import dev.abhiram.checklist.data.model.StreakColor
+import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -97,5 +99,49 @@ class DefaultChecklistRepository(
 
     override suspend fun deleteItem(itemId: String) {
         mutate { ChecklistStore.deleteItem(it, itemId, now()) }
+    }
+
+    override suspend fun createStreakTracker(title: String): String {
+        val id = newId()
+        mutate { state -> StreakStore.createTracker(state, id, title, now()) }
+        return id
+    }
+
+    override suspend fun renameStreakTracker(id: String, title: String) {
+        mutate { state -> StreakStore.renameTracker(state, id, title, now()) }
+    }
+
+    override suspend fun deleteStreakTracker(id: String) {
+        mutate { state -> StreakStore.deleteTracker(state, id) }
+    }
+
+    override suspend fun addStreakTask(
+        trackerId: String,
+        text: String,
+        color: StreakColor,
+    ): String {
+        val id = newId()
+        mutate { state -> StreakStore.addTask(state, trackerId, id, text, color, now()) }
+        return id
+    }
+
+    override suspend fun updateStreakTask(taskId: String, text: String, color: StreakColor) {
+        mutate { state -> StreakStore.updateTask(state, taskId, text, color, now()) }
+    }
+
+    override suspend fun deleteStreakTask(taskId: String) {
+        mutate { state -> StreakStore.deleteTask(state, taskId, now()) }
+    }
+
+    override suspend fun toggleStreakTask(taskId: String, date: LocalDate) {
+        mutate { state -> StreakStore.toggleTask(state, taskId, date, now()) }
+    }
+
+    override suspend fun setStreakWidgetBinding(appWidgetId: Int, trackerId: String) {
+        mutate { state -> StreakStore.setStreakWidgetBinding(state, appWidgetId, trackerId) }
+    }
+
+    override suspend fun removeStreakWidgetBinding(appWidgetId: Int) {
+        mutate { state -> StreakStore.removeStreakWidgetBinding(state, appWidgetId) }
     }
 }

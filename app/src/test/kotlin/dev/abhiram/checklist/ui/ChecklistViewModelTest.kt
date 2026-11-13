@@ -3,7 +3,9 @@ package dev.abhiram.checklist.ui
 import androidx.lifecycle.SavedStateHandle
 import dev.abhiram.checklist.data.ChecklistRepository
 import dev.abhiram.checklist.data.model.AppState
+import dev.abhiram.checklist.data.model.StreakColor
 import java.io.IOException
+import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +50,36 @@ class ChecklistViewModelTest {
         override suspend fun toggleItem(itemId: String) = throw IOException("fail")
 
         override suspend fun deleteItem(itemId: String) = throw IOException("fail")
+
+        override suspend fun createStreakTracker(title: String): String = throw IOException("fail")
+
+        override suspend fun renameStreakTracker(id: String, title: String) =
+            throw IOException("fail")
+
+        override suspend fun deleteStreakTracker(id: String) = throw IOException("fail")
+
+        override suspend fun addStreakTask(
+            trackerId: String,
+            text: String,
+            color: StreakColor,
+        ): String = throw IOException("fail")
+
+        override suspend fun updateStreakTask(
+            taskId: String,
+            text: String,
+            color: StreakColor,
+        ) = throw IOException("fail")
+
+        override suspend fun deleteStreakTask(taskId: String) = throw IOException("fail")
+
+        override suspend fun toggleStreakTask(taskId: String, date: LocalDate) =
+            throw IOException("fail")
+
+        override suspend fun setStreakWidgetBinding(appWidgetId: Int, trackerId: String) =
+            throw IOException("fail")
+
+        override suspend fun removeStreakWidgetBinding(appWidgetId: Int) =
+            throw IOException("fail")
     }
 
     private class NoOpRepository : ChecklistRepository {
@@ -76,6 +108,32 @@ class ChecklistViewModelTest {
         override suspend fun toggleItem(itemId: String) = Unit
 
         override suspend fun deleteItem(itemId: String) = Unit
+
+        override suspend fun createStreakTracker(title: String): String = "id"
+
+        override suspend fun renameStreakTracker(id: String, title: String) = Unit
+
+        override suspend fun deleteStreakTracker(id: String) = Unit
+
+        override suspend fun addStreakTask(
+            trackerId: String,
+            text: String,
+            color: StreakColor,
+        ): String = "id"
+
+        override suspend fun updateStreakTask(
+            taskId: String,
+            text: String,
+            color: StreakColor,
+        ) = Unit
+
+        override suspend fun deleteStreakTask(taskId: String) = Unit
+
+        override suspend fun toggleStreakTask(taskId: String, date: LocalDate) = Unit
+
+        override suspend fun setStreakWidgetBinding(appWidgetId: Int, trackerId: String) = Unit
+
+        override suspend fun removeStreakWidgetBinding(appWidgetId: Int) = Unit
     }
 
     @Test

@@ -1,6 +1,8 @@
 package dev.abhiram.checklist.data
 
 import dev.abhiram.checklist.data.model.AppState
+import dev.abhiram.checklist.data.model.StreakColor
+import java.time.LocalDate
 import kotlinx.coroutines.flow.StateFlow
 
 interface ChecklistRepository {
@@ -17,4 +19,13 @@ interface ChecklistRepository {
     suspend fun updateItem(itemId: String, text: String)
     suspend fun toggleItem(itemId: String)
     suspend fun deleteItem(itemId: String)
+    suspend fun createStreakTracker(title: String): String
+    suspend fun renameStreakTracker(id: String, title: String)
+    suspend fun deleteStreakTracker(id: String)
+    suspend fun addStreakTask(trackerId: String, text: String, color: StreakColor): String
+    suspend fun updateStreakTask(taskId: String, text: String, color: StreakColor)
+    suspend fun deleteStreakTask(taskId: String)
+    suspend fun toggleStreakTask(taskId: String, date: LocalDate)
+    suspend fun setStreakWidgetBinding(appWidgetId: Int, trackerId: String)
+    suspend fun removeStreakWidgetBinding(appWidgetId: Int)
 }
