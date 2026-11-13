@@ -1,5 +1,6 @@
 package dev.abhiram.checklist.ui
 
+import androidx.compose.ui.graphics.Color
 import dev.abhiram.checklist.data.model.StreakColor
 import dev.abhiram.checklist.data.model.StreakTask
 import org.junit.Assert.assertEquals
@@ -46,5 +47,13 @@ class StreakFormatTest {
             listOf(StreakColor.BLUE, StreakColor.ORANGE, StreakColor.PURPLE),
             availableStreakColors(tasks, editingTaskId = "a"),
         )
+    }
+
+    @Test
+    fun `streak colors map to compose colors`() {
+        assertEquals(Color(0xFF0A84FF), streakColor(StreakColor.BLUE))
+        assertEquals(Color(0xFF30D158), streakColor(StreakColor.GREEN))
+        assertEquals(Color(0xFFFF9F0A), streakColor(StreakColor.ORANGE))
+        assertEquals(Color(0xFFBF5AF2), streakColor(StreakColor.PURPLE))
     }
 }

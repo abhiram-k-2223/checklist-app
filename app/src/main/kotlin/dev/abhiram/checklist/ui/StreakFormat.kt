@@ -1,5 +1,6 @@
 package dev.abhiram.checklist.ui
 
+import androidx.compose.ui.graphics.Color
 import dev.abhiram.checklist.data.model.StreakColor
 import dev.abhiram.checklist.data.model.StreakTask
 
@@ -11,6 +12,8 @@ fun streakLabel(streak: Int): String = when {
 
 fun compactStreakLabel(streak: Int): String =
     if (streak <= 0) "—" else "🔥 $streak"
+
+fun streakColor(color: StreakColor): Color = Color(color.argb)
 
 fun availableStreakColors(
     tasks: List<StreakTask>,
