@@ -74,6 +74,23 @@ class StreakWidgetLayoutTest {
     }
 
     @Test
+    fun `minimum widget height leaves room for a full task row`() {
+        val metrics = streakWidgetMetrics(300f)
+
+        assertEquals(10, metrics.outerPaddingDp)
+        assertEquals(26, metrics.cellHeightDp)
+        assertTrue(
+            streakWidgetTaskAreaDp(300f) >= STREAK_WIDGET_TASK_ROW_HEIGHT_DP,
+        )
+    }
+
+    @Test
+    fun `unbound instruction points at the picker`() {
+        assertEquals("Tap to choose a tracker", streakWidgetUnboundInstruction(true))
+        assertEquals("Tap to open the picker", streakWidgetUnboundInstruction(false))
+    }
+
+    @Test
     fun `weekday labels follow the locale first day`() {
         assertEquals(DayOfWeek.SUNDAY, firstDayOfWeek(Locale.US))
         assertEquals("Sun", orderedWeekdayLabels(DayOfWeek.SUNDAY, Locale.US).first())

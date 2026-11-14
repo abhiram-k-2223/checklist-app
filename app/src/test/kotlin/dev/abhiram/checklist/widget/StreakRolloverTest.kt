@@ -1,11 +1,18 @@
 package dev.abhiram.checklist.widget
 
+import androidx.work.ExistingWorkPolicy
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class StreakRolloverTest {
+
+    @Test
+    fun `app start keeps the pending rollover and the worker replaces it`() {
+        assertEquals(ExistingWorkPolicy.KEEP, streakRolloverPolicy(fromWorker = false))
+        assertEquals(ExistingWorkPolicy.REPLACE, streakRolloverPolicy(fromWorker = true))
+    }
 
     @Test
     fun `before midnight waits until the next midnight`() {

@@ -1,5 +1,6 @@
 package dev.abhiram.checklist.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -97,10 +98,21 @@ class StreakWidget : GlanceAppWidget() {
                     putExtra(EXTRA_FROM_WIDGET, true)
                 }
             }
+            val configIntent = remember(appWidgetId) {
+                Intent(context, StreakWidgetConfigActivity::class.java).apply {
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                    )
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                }
+            }
             StreakWidgetContent(
                 tracker = tracker,
                 hasTrackers = state.streakTrackers.isNotEmpty(),
                 openIntent = openIntent,
+                configIntent = configIntent,
             )
         }
     }
@@ -157,29 +169,30 @@ private fun StreakWidgetContent(
     tracker: StreakTracker?,
     hasTrackers: Boolean,
     openIntent: Intent,
+    configIntent: Intent,
 ) {
-    val outerPadding = if (LocalSize.current.height.value < 360f) 10.dp else 14.dp
+    val metrics = streakWidgetMetrics(LocalSize.current.height.value)
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(ColorProvider(WidgetBackground))
             .cornerRadius(24.dp)
-            .padding(outerPadding),
+            .padding(metrics.outerPaddingDp.dp),
     ) {
         if (tracker == null) {
-            UnboundContent(hasTrackers = hasTrackers, openIntent = openIntent)
+            UnboundContent(hasTrackers = hasTrackers, configIntent = configIntent)
         } else {
-            BoundContent(tracker = tracker, openIntent = openIntent)
+            BoundContent(tracker = tracker, openIntent = openIntent, metrics = metrics)
         }
     }
 }
 
 @Composable
-private fun UnboundContent(hasTrackers: Boolean, openIntent: Intent) {
+private fun UnboundContent(hasTrackers: Boolean, configIntent: Intent) {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .clickable(actionStartActivity(openIntent)),
+            .clickable(actionStartActivity(configIntent)),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -193,14 +206,18 @@ private fun UnboundContent(hasTrackers: Boolean, openIntent: Intent) {
         )
         Spacer(GlanceModifier.height(4.dp))
         Text(
-            text = "Open the app to choose one",
+            text = streakWidgetUnboundInstruction(hasTrackers),
             style = TextStyle(color = ColorProvider(WidgetMuted), fontSize = 12.sp),
         )
     }
 }
 
 @Composable
-private fun BoundContent(tracker: StreakTracker, openIntent: Intent) {
+private fun BoundContent(
+    tracker: StreakTracker,
+    openIntent: Intent,
+    metrics: StreakWidgetMetrics,
+) {
     val today = LocalDate.now(ZoneId.systemDefault())
     val month = YearMonth.from(today)
     val locale = Locale.getDefault()
@@ -235,7 +252,7 @@ private fun BoundContent(tracker: StreakTracker, openIntent: Intent) {
             Spacer(GlanceModifier.height(6.dp))
             WeekdayHeader(firstDay = firstDay, locale = locale)
             Spacer(GlanceModifier.height(4.dp))
-            CalendarGrid(days = days)
+            CalendarGrid(days = days, cellHeightDp = metrics.cellHeightDp)
         }
         Spacer(GlanceModifier.height(10.dp))
         StreakDivider()
@@ -252,7 +269,7 @@ private fun BoundContent(tracker: StreakTracker, openIntent: Intent) {
                     .defaultWeight(),
             ) {
                 items(rows, itemId = { it.task.id.hashCode().toLong() }) { row ->
-                    StreakTaskRow(row = row)
+                    StreakTaskRow(row = row, heightDp = metrics.taskRowHeightDp)
                     StreakDivider()
                 }
             }
@@ -279,7 +296,7 @@ private fun WeekdayHeader(firstDay: DayOfWeek, locale: Locale) {
 }
 
 @Composable
-private fun CalendarGrid(days: List<StreakCalendarDay>) {
+private fun CalendarGrid(days: List<StreakCalendarDay>, cellHeightDp: Int) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
         days.chunked(7).forEach { week ->
             Row(modifier = GlanceModifier.fillMaxWidth()) {
@@ -287,6 +304,7 @@ private fun CalendarGrid(days: List<StreakCalendarDay>) {
                     CalendarDayCell(
                         day = day,
                         modifier = GlanceModifier.defaultWeight(),
+                        cellHeightDp = cellHeightDp,
                     )
                 }
             }
@@ -295,14 +313,18 @@ private fun CalendarGrid(days: List<StreakCalendarDay>) {
 }
 
 @Composable
-private fun CalendarDayCell(day: StreakCalendarDay, modifier: GlanceModifier) {
+private fun CalendarDayCell(
+    day: StreakCalendarDay,
+    modifier: GlanceModifier,
+    cellHeightDp: Int,
+) {
     val cellModifier = if (day.isToday) {
         modifier
-            .height(30.dp)
+            .height(cellHeightDp.dp)
             .background(ColorProvider(WidgetToday))
             .cornerRadius(8.dp)
     } else {
-        modifier.height(30.dp)
+        modifier.height(cellHeightDp.dp)
     }
     Box(modifier = cellModifier, contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -333,11 +355,11 @@ private fun CalendarDayCell(day: StreakCalendarDay, modifier: GlanceModifier) {
 }
 
 @Composable
-private fun StreakTaskRow(row: StreakWidgetTaskRow) {
+private fun StreakTaskRow(row: StreakWidgetTaskRow, heightDp: Int) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .height(36.dp)
+            .height(heightDp.dp)
             .clickable(
                 actionRunCallback<ToggleStreakTaskAction>(
                     actionParametersOf(StreakWidget.TASK_ID_KEY to row.task.id),

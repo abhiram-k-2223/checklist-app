@@ -19,7 +19,10 @@ fun millisUntilNextMidnight(now: ZonedDateTime): Long {
     return Duration.between(now, next).toMillis()
 }
 
-fun scheduleStreakRollover(context: Context) {
+fun streakRolloverPolicy(fromWorker: Boolean): ExistingWorkPolicy =
+    if (fromWorker) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP
+
+fun scheduleStreakRollover(context: Context, fromWorker: Boolean = false) {
     val request = OneTimeWorkRequestBuilder<StreakRolloverWorker>()
         .setInitialDelay(
             millisUntilNextMidnight(ZonedDateTime.now()),
@@ -28,7 +31,7 @@ fun scheduleStreakRollover(context: Context) {
         .build()
     WorkManager.getInstance(context).enqueueUniqueWork(
         STREAK_ROLLOVER_WORK,
-        ExistingWorkPolicy.REPLACE,
+        streakRolloverPolicy(fromWorker),
         request,
     )
 }
@@ -47,7 +50,7 @@ class StreakRolloverWorker(
             Log.e(TAG, "Failed to refresh streak widgets", error)
         } finally {
             try {
-                scheduleStreakRollover(applicationContext)
+                scheduleStreakRollover(applicationContext, fromWorker = true)
             } catch (error: Exception) {
                 Log.e(TAG, "Failed to schedule the next streak rollover", error)
             }

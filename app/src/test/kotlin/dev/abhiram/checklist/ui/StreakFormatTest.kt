@@ -50,6 +50,14 @@ class StreakFormatTest {
     }
 
     @Test
+    fun `color names are available for accessibility`() {
+        assertEquals("Blue", streakColorName(StreakColor.BLUE))
+        assertEquals("Green", streakColorName(StreakColor.GREEN))
+        assertEquals("Orange", streakColorName(StreakColor.ORANGE))
+        assertEquals("Purple", streakColorName(StreakColor.PURPLE))
+    }
+
+    @Test
     fun `streak colors map to compose colors`() {
         assertEquals(Color(0xFF0A84FF), streakColor(StreakColor.BLUE))
         assertEquals(Color(0xFF30D158), streakColor(StreakColor.GREEN))

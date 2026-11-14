@@ -5,6 +5,7 @@ package dev.abhiram.checklist.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +45,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -385,29 +389,43 @@ private fun StreakTaskDialog(
                 Spacer(Modifier.height(16.dp))
                 Text("Color", style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     StreakColor.entries.forEach { candidate ->
                         val enabled = candidate in available
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
-                                .background(
-                                    color = streakColor(candidate).copy(
-                                        alpha = if (enabled) 1f else 0.25f,
+                                .size(48.dp)
+                                .selectable(
+                                    selected = color == candidate,
+                                    enabled = enabled,
+                                    role = Role.RadioButton,
+                                    onClick = { color = candidate },
+                                )
+                                .semantics {
+                                    contentDescription = streakColorName(candidate)
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(
+                                        color = streakColor(candidate).copy(
+                                            alpha = if (enabled) 1f else 0.25f,
+                                        ),
+                                        shape = CircleShape,
+                                    )
+                                    .border(
+                                        width = if (color == candidate) 3.dp else 0.dp,
+                                        color = if (color == candidate) {
+                                            MaterialTheme.colorScheme.onSurface
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        shape = CircleShape,
                                     ),
-                                    shape = CircleShape,
-                                )
-                                .border(
-                                    width = if (color == candidate) 3.dp else 0.dp,
-                                    color = if (color == candidate) {
-                                        MaterialTheme.colorScheme.onSurface
-                                    } else {
-                                        Color.Transparent
-                                    },
-                                    shape = CircleShape,
-                                )
-                                .clickable(enabled = enabled) { color = candidate },
-                        )
+                            )
+                        }
                     }
                 }
                 if (available.isEmpty()) {

@@ -15,6 +15,13 @@ fun compactStreakLabel(streak: Int): String =
 
 fun streakColor(color: StreakColor): Color = Color(color.argb)
 
+fun streakColorName(color: StreakColor): String = when (color) {
+    StreakColor.BLUE -> "Blue"
+    StreakColor.GREEN -> "Green"
+    StreakColor.ORANGE -> "Orange"
+    StreakColor.PURPLE -> "Purple"
+}
+
 fun availableStreakColors(
     tasks: List<StreakTask>,
     editingTaskId: String? = null,
