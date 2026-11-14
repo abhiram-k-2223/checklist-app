@@ -2,8 +2,8 @@
 
 **Date:** 2026-11-14
 **Repository:** `https://github.com/abhiram-k-2223/checklist-app`
-**Branch:** `feat/streak-tracker`
-**Implementation range:** `97500a3..944121c`
+**Branch:** `master` (merged from `feat/streak-tracker`)
+**Implementation range:** `97500a3..cf2405c`
 **Phone:** `GAKNWKGQJJJ7QWXW`
 
 ## What changed
@@ -28,8 +28,8 @@
   `./gradlew :app:testDebugUnitTest --rerun-tasks`.
 - Debug build: `./gradlew :app:assembleDebug` succeeded.
 - Release build: `./gradlew :app:assembleRelease` succeeded.
-- Release APK SHA-256:
-  `6b07b04d43c0ed563b6ec579ba5bc9ad36a3e2ca6857039938340026cf08b71b`.
+- Published release APK SHA-256:
+  `bee42f49a70eeeba7134fcc658285f1fd20b45c5f93a7dd0545f9fdbd0bdc911`.
 - Merged release manifest contains `StreakWidgetReceiver` and
   `StreakWidgetConfigActivity` with exported flags and the
   `APPWIDGET_UPDATE` / `APPWIDGET_CONFIGURE` filters.
@@ -77,6 +77,6 @@ All five were addressed in `944121c`:
 - **Review Focus #5:** the minimum-height layout-budget test was added. The
   on-device matrix remains blocked because the phone is disconnected.
 
-After the fixes, 150 unit tests pass, both builds succeed, and the release APK
-SHA-256 is
-`6b07b04d43c0ed563b6ec579ba5bc9ad36a3e2ca6857039938340026cf08b71b`.
+After the fixes, 150 unit tests pass, both builds succeed, and the published
+release APK SHA-256 is
+`bee42f49a70eeeba7134fcc658285f1fd20b45c5f93a7dd0545f9fdbd0bdc911`.
