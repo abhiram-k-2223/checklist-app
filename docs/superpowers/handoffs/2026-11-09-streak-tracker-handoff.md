@@ -1,9 +1,9 @@
 # Streak Tracker Handoff
 
-**Date:** 2026-11-13
+**Date:** 2026-11-14
 **Repository:** `https://github.com/abhiram-k-2223/checklist-app`
 **Branch:** `feat/streak-tracker`
-**Implementation range:** `97500a3..6c680c5`
+**Implementation range:** `97500a3..944121c`
 **Phone:** `GAKNWKGQJJJ7QWXW`
 
 ## What changed
@@ -24,12 +24,12 @@
 
 ## Verification performed
 
-- Unit tests: 146 passed with
+- Unit tests: 150 passed with
   `./gradlew :app:testDebugUnitTest --rerun-tasks`.
 - Debug build: `./gradlew :app:assembleDebug` succeeded.
 - Release build: `./gradlew :app:assembleRelease` succeeded.
 - Release APK SHA-256:
-  `45d6e1e579da9a8ab8f5f0a2217786930d9c725333f3ac51eeef032abebde797`.
+  `6b07b04d43c0ed563b6ec579ba5bc9ad36a3e2ca6857039938340026cf08b71b`.
 - Merged release manifest contains `StreakWidgetReceiver` and
   `StreakWidgetConfigActivity` with exported flags and the
   `APPWIDGET_UPDATE` / `APPWIDGET_CONFIGURE` filters.
@@ -58,4 +58,25 @@
 
 ## Review fixes
 
-None yet; this section is updated after the final whole-branch review.
+The final whole-branch review found two critical and three important issues.
+All five were addressed in `944121c`:
+
+- **Rollover self-cancellation:** app startup now uses
+  `ExistingWorkPolicy.KEEP`, while the worker's next-midnight reschedule uses
+  `REPLACE`. A regression test pins both policy choices.
+- **Minimum-height task rows:** below 360dp the widget uses 10dp padding and
+  26dp calendar cells, leaving 40dp for the 36dp task rows at the declared
+  300dp minimum. A layout-budget test asserts a full row fits.
+- **Unbound widget dead end:** an unbound widget now opens
+  `StreakWidgetConfigActivity` with its app-widget ID, and the copy tells the
+  user to tap to choose or open the picker. The config activity's existing
+  empty state still offers `Open app`.
+- **Color picker accessibility:** each color is now a 48dp radio-style
+  selectable target with a per-color content description and a visible selected
+  ring. The color-name helper is unit-tested.
+- **Review Focus #5:** the minimum-height layout-budget test was added. The
+  on-device matrix remains blocked because the phone is disconnected.
+
+After the fixes, 150 unit tests pass, both builds succeed, and the release APK
+SHA-256 is
+`6b07b04d43c0ed563b6ec579ba5bc9ad36a3e2ca6857039938340026cf08b71b`.

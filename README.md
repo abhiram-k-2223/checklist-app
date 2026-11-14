@@ -65,8 +65,8 @@ adb shell am start -n dev.abhiram.checklist/.MainActivity
   WorkManager job refreshes streak widgets just after local midnight; it never
   resets completion history.
 - Glance bundles WorkManager for async widget requests, but its startup
-  initializer is disabled; WorkManager starts only when a widget request or the
-  daily streak rollover needs it
+  initializer is disabled; WorkManager is initialized when the app schedules
+  the daily streak rollover or a widget request needs it
 - Both widgets use `updatePeriodMillis=0`; after a successful app mutation the
   ViewModel awaits an update of every widget of that type, and a widget tap
   updates its own widget before the action callback returns. The streak widget
@@ -121,7 +121,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew test
 ```
 
-The suite has 146 tests covering the JSON codec, checklist and streak store
+The suite has 150 tests covering the JSON codec, checklist and streak store
 rules, repository persistence, corrupt state recovery, per-widget checklist
 binding and migration, streak calculation and calendar layout, streak widget
 rows and picker, midnight rollover timing, and ViewModel mutation success/error
